@@ -27,12 +27,22 @@ case "$action" in
         fi
         ;;
 	install-no-collision)
-		checksync
-		FEATURES="parallel-fetch -collision-protect -protect-owned candy compressdebug splitdebug" emerge -av "$@"
+		if [ "$1" == "--check" ] ; then
+			checksync
+			shift
+			FEATURES="parallel-fetch -collision-protect -protect-owned candy compressdebug splitdebug" emerge -av "$@"
+		else
+			FEATURES="parallel-fetch -collision-protect -protect-owned candy compressdebug splitdebug" emerge -av "$@"
+		fi
 		;;
 	install-bin-pkg|ibin)
-		checksync
-		EMERGE_DEFAULT_OPTS="${EMERGE_DEFAULT_OPTS} --getbinpkgonly " emerge -av "$@"
+		if [ "$1" == "--check" ] ; then
+			checksync
+			shift
+			EMERGE_DEFAULT_OPTS="${EMERGE_DEFAULT_OPTS} --getbinpkgonly " emerge -av "$@"
+		else
+			EMERGE_DEFAULT_OPTS="${EMERGE_DEFAULT_OPTS} --getbinpkgonly " emerge -av "$@"
+		fi
 		;;
 	remove|r)
         if [ "$1" == "--check" ] ; then
