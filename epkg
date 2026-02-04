@@ -43,10 +43,12 @@ case "$action" in
 			emaint binhost -f
 			EMERGE_DEFAULT_OPTS="${EMERGE_DEFAULT_OPTS} --getbinpkgonly " emerge -qa --fetchonly "$@"
 			qmerge -q "$@"
+			echo "Do't forget to run '\033[1;33meclean packages\033[0m' to clean /var/cache/binpkgs"
 		else
 			emaint binhost -f
 			EMERGE_DEFAULT_OPTS="${EMERGE_DEFAULT_OPTS} --getbinpkgonly " emerge -qa --fetchonly "$@"
 			qmerge -q "$@"
+			echo "Do't forget to run '\033[1;33meclean packages\033[0m' to clean /var/cache/binpkgs"
 		fi
 		;;
 	remove|r)
@@ -157,10 +159,12 @@ case "$action" in
 			emaint binhost -f
 			EMERGE_DEFAULT_OPTS="${EMERGE_DEFAULT_OPTS} --getbinpkgonly " emerge -qa --fetchonly "$@"
 			qmerge -yq "$@"
+			echo "Do't forget to run '\033[1;33meclean packages\033[0m' to clean /var/cache/binpkgs"
 		else
 			emaint binhost -f
 			EMERGE_DEFAULT_OPTS="${EMERGE_DEFAULT_OPTS} --getbinpkgonly " emerge -qa --fetchonly "$@"
 			qmerge -yq "$@"
+			echo "Do't forget to run '\033[1;33meclean packages\033[0m' to clean /var/cache/binpkgs"
 		fi
 		;;
 	autoremove|ar)
