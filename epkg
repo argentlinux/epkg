@@ -101,9 +101,11 @@ case "$action" in
 			shift
 			PKGDIR="${PKGDIR:-}" DISTDIR="${DISTDIR:-}" set_var_cache_dir
 			emerge -uDaN @system @world "$@"
+			echo "Don't forget to do 'epkg clean' every time you do a upgrade!"
 		else
 			PKGDIR="${PKGDIR:-}" DISTDIR="${DISTDIR:-}" set_var_cache_dir
 			emerge -uDaN @system @world "$@"
+			echo "Don't forget to do 'epkg clean' every time you do a upgrade!"
 		fi
 		;;
 	upgrade-full|ugf)
@@ -111,8 +113,10 @@ case "$action" in
 			checksync
 			shift
 			emerge -uDvaN --with-bdeps=y @system @world "$@" --backtrack=150
+			echo "Don't forget to do 'epkg clean' every time you do a upgrade!"
 		else
 			emerge -uDvaN --with-bdeps=y @system @world "$@" --backtrack=150
+			echo "Don't forget to do 'epkg clean' every time you do a upgrade!"
 		fi
 		;;
 	upgrade-specific)
@@ -120,13 +124,16 @@ case "$action" in
             checksync
             shift
             emerge -uDvaN "$@" --backtrack=150
+			echo "Don't forget to do 'epkg clean' every time you do a upgrade!"
         else
             emerge -uDvaN "$@" --backtrack=150
+			echo "Don't forget to do 'epkg clean' every time you do a upgrade!"
         fi
 		;;
 	upgrade-nocol)
 		checksync
 		FEATURES="parallel-fetch -collision-protect -protect-owned candy compressdebug splitdebug" emerge -uDvaN --with-bdeps=y @system @world "$@" --backtrack=150
+		echo "Don't forget to do 'epkg clean' every time you do a upgrade!"
 		;;
 	autoinstall|ai)
 		if [ "$1" == "--update" ] ; then
@@ -317,8 +324,10 @@ case "$action" in
 			fi
 			shift
 			emerge -uDN @system @world "$@"
+			echo "Don't forget to do 'epkg clean' every time you do a upgrade!"
 		else
 			emerge -uDN @system @world "$@"
+			echo "Don't forget to do 'epkg clean' every time you do a upgrade!"
 		fi
 		;;
 	autoupgrade-full|augf)
@@ -329,8 +338,10 @@ case "$action" in
 			fi
 			shift
 			emerge -uDvN --with-bdeps=y @system @world "$@"
+			echo "Don't forget to do 'epkg clean' every time you do a upgrade!"
 		else
 			emerge -uDvN --with-bdeps=y @system @world "$@"
+			echo "Don't forget to do 'epkg clean' every time you do a upgrade!"
 		fi
 		;;
 	autoupgrade-nocol)
@@ -338,9 +349,11 @@ case "$action" in
 			fetchminimalsync
 		fi
 		FEATURES="parallel-fetch -collision-protect -protect-owned candy compressdebug splitdebug" emerge -uDvN --with-bdeps=y @system @world "$@"
+		echo "Don't forget to do 'epkg clean' every time you do a upgrade!"
 		;;
 	upgrade-specific)
 		emerge -uDvN "$@"
+		echo "Don't forget to do 'epkg clean' every time you do a upgrade!"
 		;;
 	remove-orphans)
 		remove_orphans
