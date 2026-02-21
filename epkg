@@ -41,12 +41,12 @@ case "$action" in
 			checksync
 			shift
 			emaint binhost -f
-			EMERGE_DEFAULT_OPTS="${EMERGE_DEFAULT_OPTS} --getbinpkgonly " emerge -qa --fetchonly "$@"
+			EMERGE_DEFAULT_OPTS="${EMERGE_DEFAULT_OPTS} --getbinpkgonly " emerge -Kqa --fetchonly "$@"
 			qmerge -q "$@"
 			echo "Don't forget to run 'eclean packages' to clean /var/cache/binpkgs"
 		else
 			emaint binhost -f
-			EMERGE_DEFAULT_OPTS="${EMERGE_DEFAULT_OPTS} --getbinpkgonly " emerge -qa --fetchonly "$@"
+			EMERGE_DEFAULT_OPTS="${EMERGE_DEFAULT_OPTS} --getbinpkgonly " emerge -Kqa --fetchonly "$@"
 			qmerge -q "$@"
 			echo "Don't forget to run 'eclean packages' to clean /var/cache/binpkgs"
 		fi
@@ -164,12 +164,12 @@ case "$action" in
 			fi
 			shift
 			emaint binhost -f
-			EMERGE_DEFAULT_OPTS="${EMERGE_DEFAULT_OPTS} --getbinpkgonly " emerge -qa --fetchonly "$@"
+			EMERGE_DEFAULT_OPTS="${EMERGE_DEFAULT_OPTS} --getbinpkgonly " emerge -Kq --fetchonly "$@"
 			qmerge -yq "$@"
 			echo "Don't forget to run 'eclean packages' to clean /var/cache/binpkgs"
 		else
 			emaint binhost -f
-			EMERGE_DEFAULT_OPTS="${EMERGE_DEFAULT_OPTS} --getbinpkgonly " emerge -qa --fetchonly "$@"
+			EMERGE_DEFAULT_OPTS="${EMERGE_DEFAULT_OPTS} --getbinpkgonly " emerge -Kq --fetchonly "$@"
 			qmerge -yq "$@"
 			echo "Don't forget to run 'eclean packages' to clean /var/cache/binpkgs"
 		fi
