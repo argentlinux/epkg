@@ -11,6 +11,12 @@ fi
 
 source "${MAKECONF_PATH}"
 
+if [[ -e "/etc/portage/make.conf.local" ]]; then
+    source "/etc/portage/make.conf.local"
+else
+    touch "/etc/portage/make.conf.local"
+fi
+
 # generic Argent variables
 export ADD_OPTS="${ADD_OPTS:-}"
 
