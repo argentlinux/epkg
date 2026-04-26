@@ -435,8 +435,8 @@ cleanoutdated() {
 }
 
 cleanlocalpkg() {
-    # function to cleanup all local packages in /usr/portage/packages
-    # it also includes deletion of /usr/portage/Packages
+    # function to cleanup all local packages in /var/cache/binpkgs
+    # it also includes deletion of /var/cache/binpkgs
     # if we do not have any /usr/portage, there is no reason we should continue
 
 	checkmakeconf
