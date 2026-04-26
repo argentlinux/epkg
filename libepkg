@@ -3,7 +3,13 @@
 
 #!/usr/bin/env bash
 
-source /etc/portage/make.conf
+if [[ -d "/etc/portage/make.conf" ]]; then
+    export MAKECONF_PATH="/etc/portage/make.conf/main.conf"
+else
+    export MAKECONF_PATH="/etc/portage/make.conf"
+fi
+
+source "${MAKECONF_PATH}"
 
 # generic Argent variables
 export ADD_OPTS="${ADD_OPTS:-}"
@@ -31,7 +37,7 @@ checkroot() {
 }
 
 checksystemmode() {
-	if [[ "$(readlink -f "/etc/portage/make.conf")" = "/opt/argentws-build/conf/intel/portage/make.conf.amd64-srcmode" ]] ; then
+	if [[ "$(readlink -f "${MAKECONF_PATH}")" = "/opt/argentws-build/conf/intel/portage/make.conf.amd64-srcmode" ]] ; then
 		eerror "The system is set to SRCMODE (full Gentoo mode), cowardly refusing to run!"
 		exit 1
 	fi
@@ -93,10 +99,10 @@ checkmakeconf() {
 	# function checking the existence and validity of make.conf
 	# in accordance wih gentoo and argentws-build standard
 
-        if [ -e "/etc/portage/make.conf" ] ; then
-                . /etc/portage/make.conf
+        if [ -e "${MAKECONF_PATH}" ] ; then
+                . "${MAKECONF_PATH}"
 		unset PKGDIR
-		export PKGDIR="${PKGDIR:-$(cat /etc/portage/make.conf | grep 'PKGDIR=' | cut -d '"' -f2)}"
+		export PKGDIR="${PKGDIR:-$(cat "${MAKECONF_PATH}" | grep 'PKGDIR=' | cut -d '"' -f2)}"
 	else
                 eerror "The file does not match the pattern of environment script"
                 echo "Please consider using avasile to change to one of the modes"
@@ -167,16 +173,16 @@ set_var_cache_dir() {
     export COLOR_ON="\e[1;49;34m"
     export COLOR_OFF="\e[0m"
 
-    if [ -e "/etc/portage/make.conf" ] ; then
-        . /etc/portage/make.conf
+    if [ -e "${MAKECONF_PATH}" ] ; then
+        . "${MAKECONF_PATH}"
         if [ -z "${PKGDIR}" ]; then
-            export PKGDIR="$(cat /etc/portage/make.conf | grep 'PKGDIR=' | cut -d '"' -f2)"
+            export PKGDIR="$(cat "${MAKECONF_PATH}" | grep 'PKGDIR=' | cut -d '"' -f2)"
         fi
         if [ -z "${DISTDIR}" ]; then
-            export DISTDIR="$(cat /etc/portage/make.conf | grep 'DISTDIR=' | cut -d '"' -f2)"
+            export DISTDIR="$(cat "${MAKECONF_PATH}" | grep 'DISTDIR=' | cut -d '"' -f2)"
         fi
         if [ -z "${PORTAGE_GROUP}" ]; then
-            export PORTAGE_GROUP="$(cat /etc/portage/make.conf | grep 'PORTAGE_GROUP=' | cut -d '"' -f2)"
+            export PORTAGE_GROUP="$(cat "${MAKECONF_PATH}" | grep 'PORTAGE_GROUP=' | cut -d '"' -f2)"
         fi
         else
         eerror "The file does not match the pattern of environment script"
@@ -370,7 +376,7 @@ backupallpkg() {
 	eerror "Warning: If you backup everything, make sure you keep the packages safe :)"
 	eerror "We cannot take responsibility of safe-guarding the newly backed-up system"
 
-	if [[ "$(readlink -f "/etc/portage/make.conf")" = "/opt/argentws-build/conf/intel/portage/make.conf.amd64-user" ]] ; then
+	if [[ "$(readlink -f "${MAKECONF_PATH}")" = "/opt/argentws-build/conf/intel/portage/make.conf.amd64-user" ]] ; then
 		eerror "You are on --usermode, we propose using: avasile --devmode or --srcmode for this"
 		eerror "If you continue, you continue at your own risk!"
 		eerror "Make sure you keep the backup safe!"
@@ -444,7 +450,7 @@ cleanlocalpkg() {
 }
 
 src_newuse() {
-	if [[ "$(readlink -f "/etc/portage/make.conf")" = "/opt/argentws-build/conf/intel/portage/make.conf.amd64-user" ]] ; then
+	if [[ "$(readlink -f "${MAKECONF_PATH}")" = "/opt/argentws-build/conf/intel/portage/make.conf.amd64-user" ]] ; then
 		eerror "You are on --usermode, we propose using: avasile --devmode or --srcmode for this"
 		eerror "If you continue, you continue at your own risk!"
 		sleep 3
@@ -457,7 +463,7 @@ src_newuse() {
 compilepkg() {
 	# function to call a recompile of a package and save it to ${PKGDIR}"
 
-	if [[ "$(readlink -f "/etc/portage/make.conf")" = "/opt/argentws-build/conf/intel/portage/make.conf.amd64-user" ]] ; then
+	if [[ "$(readlink -f "${MAKECONF_PATH}")" = "/opt/argentws-build/conf/intel/portage/make.conf.amd64-user" ]] ; then
 		eerror "You are on --usermode, we propose using: avasile --devmode or --srcmode for this"
 		eerror "If you continue, you continue at your own risk!"
 		sleep 3
@@ -470,7 +476,7 @@ compilepkg() {
 recompilepkg() {
 	# function to call a recompile of a package and save it to ${PKGDIR}"
 
-	if [[ "$(readlink -f "/etc/portage/make.conf")" = "/opt/argentws-build/conf/intel/portage/make.conf.amd64-user" ]] ; then
+	if [[ "$(readlink -f "${MAKECONF_PATH}")" = "/opt/argentws-build/conf/intel/portage/make.conf.amd64-user" ]] ; then
 		eerror "You are on --usermode, we propose using: avasile --devmode or --srcmode for this"
 		eerror "If you continue, you continue at your own risk!"
 		sleep 3
@@ -483,7 +489,7 @@ recompilepkg() {
 recompileallpkg() {
 	# function to recompile everything on the system and also save all the recompiled packages.
 
-	if [[ "$(readlink -f "/etc/portage/make.conf")" = "/opt/argentws-build/conf/intel/portage/make.conf.amd64-user" ]] ; then
+	if [[ "$(readlink -f "${MAKECONF_PATH}")" = "/opt/argentws-build/conf/intel/portage/make.conf.amd64-user" ]] ; then
 		eerror "You are not allowed to run in --usermode, we propose using: avasile --devmode or --srcmode for this"
 		exit 1
 	else
@@ -499,7 +505,7 @@ recompileallpkg() {
 autocompilepkg() {
 	# function to call a recompile of a package and save it to ${PKGDIR}"
 
-	if [[ "$(readlink -f "/etc/portage/make.conf")" = "/opt/argentws-build/conf/intel/portage/make.conf.amd64-user" ]] ; then
+	if [[ "$(readlink -f "${MAKECONF_PATH}")" = "/opt/argentws-build/conf/intel/portage/make.conf.amd64-user" ]] ; then
 		eerror "You are on --usermode, we propose using: avasile --devmode or --srcmode for this"
 		eerror "If you continue, you continue at your own risk!"
 		sleep 3
@@ -512,7 +518,7 @@ autocompilepkg() {
 autorecompilepkg() {
 	# function to call a recompile of a package and save it to ${PKGDIR}"
 
-	if [[ "$(readlink -f "/etc/portage/make.conf")" = "/opt/argentws-build/conf/intel/portage/make.conf.amd64-user" ]] ; then
+	if [[ "$(readlink -f "${MAKECONF_PATH}")" = "/opt/argentws-build/conf/intel/portage/make.conf.amd64-user" ]] ; then
 		eerror "You are on --usermode, we propose using: avasile --devmode or --srcmode for this"
 		eerror "If you continue, you continue at your own risk!"
 		sleep 3
@@ -525,7 +531,7 @@ autorecompilepkg() {
 autorecompileallpkg() {
 	# function to recompile everything on the system and also save all the recompiled packages.
 
-	if [[ "$(readlink -f "/etc/portage/make.conf")" = "/opt/argentws-build/conf/intel/portage/make.conf.amd64-user" ]] ; then
+	if [[ "$(readlink -f "${MAKECONF_PATH}")" = "/opt/argentws-build/conf/intel/portage/make.conf.amd64-user" ]] ; then
 		eerror "You are not allowed to run in --usermode, we propose using: avasile --devmode or --srcmode for this"
 		exit 1
 	else
@@ -551,7 +557,7 @@ recompile_depend() {
         fi
     done
 
-    if [[ "$(readlink -f "/etc/portage/make.conf")" = "/opt/argentws-build/conf/intel/portage/make.conf.amd64-user" ]]; then
+    if [[ "$(readlink -f "${MAKECONF_PATH}")" = "/opt/argentws-build/conf/intel/portage/make.conf.amd64-user" ]]; then
         eerror "You are on --usermode, we propose using: avasile --devmode or --srcmode for this"
         eerror "If you continue, you continue at your own risk!"
         sleep 3
@@ -585,7 +591,7 @@ recompile_depend() {
 recompile_depend_new() {
     # function to recompile all the new packages that directly depend on this package
 
-    if [[ "$(readlink -f "/etc/portage/make.conf")" = "/opt/argentws-build/conf/intel/portage/make.conf.amd64-user" ]] ; then
+    if [[ "$(readlink -f "${MAKECONF_PATH}")" = "/opt/argentws-build/conf/intel/portage/make.conf.amd64-user" ]] ; then
         eerror "You are on --usermode, we propose using: avasile --devmode or --srcmode for this"
         eerror "If you continue, you continue at your own risk!"
         sleep 3
@@ -629,7 +635,7 @@ autorecompile_depend() {
         fi
     done
 
-    if [[ "$(readlink -f "/etc/portage/make.conf")" = "/opt/argentws-build/conf/intel/portage/make.conf.amd64-user" ]]; then
+    if [[ "$(readlink -f "${MAKECONF_PATH}")" = "/opt/argentws-build/conf/intel/portage/make.conf.amd64-user" ]]; then
         eerror "You are on --usermode, we propose using: avasile --devmode or --srcmode for this"
         eerror "If you continue, you continue at your own risk!"
         sleep 3
@@ -663,7 +669,7 @@ autorecompile_depend() {
 autorecompile_depend_new() {
     # function to recompile all the new packages that directly depend on this package with no confirmation
 
-    if [[ "$(readlink -f "/etc/portage/make.conf")" = "/opt/argentws-build/conf/intel/portage/make.conf.amd64-user" ]] ; then
+    if [[ "$(readlink -f "${MAKECONF_PATH}")" = "/opt/argentws-build/conf/intel/portage/make.conf.amd64-user" ]] ; then
         eerror "You are on --usermode, we propose using: avasile --devmode or --srcmode for this"
         eerror "If you continue, you continue at your own risk!"
         sleep 3
@@ -693,7 +699,7 @@ autorecompile_depend_new() {
 reinstall_depend() {
 	# function to reinstall all new packages that directly depend on this package
 
-	if [[ "$(readlink -f "/etc/portage/make.conf")" = "/opt/argentws-build/conf/intel/portage/make.conf.amd64-user" ]] ; then
+	if [[ "$(readlink -f "${MAKECONF_PATH}")" = "/opt/argentws-build/conf/intel/portage/make.conf.amd64-user" ]] ; then
 		eerror "You are on --usermode, we propose using: avasile --devmode or --srcmode for this"
 		eerror "If you continue, you continue at your own risk!"
 		sleep 3
@@ -714,7 +720,7 @@ reinstall_depend() {
 autoreinstall_depend() {
 	# function to reinstall all new packages that directly depend on this package
 
-	if [[ "$(readlink -f "/etc/portage/make.conf")" = "/opt/argentws-build/conf/intel/portage/make.conf.amd64-user" ]] ; then
+	if [[ "$(readlink -f "${MAKECONF_PATH}")" = "/opt/argentws-build/conf/intel/portage/make.conf.amd64-user" ]] ; then
 		eerror "You are on --usermode, we propose using: avasile --devmode or --srcmode for this"
 		eerror "If you continue, you continue at your own risk!"
 		sleep 3
@@ -741,7 +747,7 @@ fetchsourcepkg() {
 	# function to warn the regular user that he's doing something wrong
 	# but still do it anyway.
 
-	if [[ "$(readlink -f "/etc/portage/make.conf")" = "/opt/argentws-build/conf/intel/portage/make.conf.amd64-user" ]] ; then
+	if [[ "$(readlink -f "${MAKECONF_PATH}")" = "/opt/argentws-build/conf/intel/portage/make.conf.amd64-user" ]] ; then
 		eerror "You are on --usermode, we propose using: avasile --devmode or --srcmode for this"
 		sleep 3
 		EMERGE_DEFAULT_OPTS="--rebuilt-binaries" emerge --fetchonly "$@"
@@ -762,7 +768,7 @@ fetchbinpkg() {
 	# function to warn the regular user that he's doing something wrong
 	# but still do it anyway.
 
-	if [[ "$(readlink -f "/etc/portage/make.conf")" = "/opt/argentws-build/conf/intel/portage/make.conf.amd64-user" ]] ; then
+	if [[ "$(readlink -f "${MAKECONF_PATH}")" = "/opt/argentws-build/conf/intel/portage/make.conf.amd64-user" ]] ; then
 		eerror "Fetching binary package(s) from remote"
 		sleep 2
 		EMERGE_DEFAULT_OPTS="--getbinpkgonly --rebuilt-binaries" emerge --fetchonly "$@"
@@ -795,7 +801,7 @@ buildinstall() {
 
 	checkportdir
 
-	if [[ "$(readlink -f "/etc/portage/make.conf")" = "/opt/argentws-build/conf/intel/portage/make.conf.amd64-user" ]] ; then
+	if [[ "$(readlink -f "${MAKECONF_PATH}")" = "/opt/argentws-build/conf/intel/portage/make.conf.amd64-user" ]] ; then
 		eerror "You cannot run buildpkgonly from the user profile!"
 		exit 1
 	else
@@ -820,7 +826,7 @@ autobuildinstall() {
 
 	checkportdir
 
-	if [[ "$(readlink -f "/etc/portage/make.conf")" = "/opt/argentws-build/conf/intel/portage/make.conf.amd64-user" ]] ; then
+	if [[ "$(readlink -f "${MAKECONF_PATH}")" = "/opt/argentws-build/conf/intel/portage/make.conf.amd64-user" ]] ; then
 		eerror "You cannot run buildpkgonly from the user profile!"
 		exit 1
 	else
@@ -839,7 +845,7 @@ buildpkgonly() {
 
 	checkportdir
 
-	if [[ "$(readlink -f "/etc/portage/make.conf")" = "/opt/argentws-build/conf/intel/portage/make.conf.amd64-user" ]] ; then
+	if [[ "$(readlink -f "${MAKECONF_PATH}")" = "/opt/argentws-build/conf/intel/portage/make.conf.amd64-user" ]] ; then
 		eerror "You cannot run buildpkgonly from the user profile!"
 		exit 1
 	else
@@ -856,7 +862,7 @@ autobuildpkgonly() {
 
 	checkportdir
 
-	if [[ "$(readlink -f "/etc/portage/make.conf")" = "/opt/argentws-build/conf/intel/portage/make.conf.amd64-user" ]] ; then
+	if [[ "$(readlink -f "${MAKECONF_PATH}")" = "/opt/argentws-build/conf/intel/portage/make.conf.amd64-user" ]] ; then
 		eerror "You cannot run buildpkgonly from the user profile!"
 		exit 1
 	else
