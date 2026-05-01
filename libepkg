@@ -4,7 +4,9 @@
 #!/usr/bin/env bash
 
 if [[ -d "/etc/portage/make.conf" ]]; then
-    export MAKECONF_PATH="/etc/portage/make.conf/main.conf"
+    [[ -e "/etc/portage/make.conf/main.conf" ]] \
+        && export MAKECONF_PATH="/etc/portage/make.conf/main.conf" \
+        || export MAKECONF_PATH="/etc/portage/make.conf/00-argent.conf"
 else
     export MAKECONF_PATH="/etc/portage/make.conf"
 fi
