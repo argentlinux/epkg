@@ -110,7 +110,8 @@ checkmakeconf() {
         if [ -e "${MAKECONF_PATH}" ] ; then
                 . "${MAKECONF_PATH}"
 		unset PKGDIR
-		export PKGDIR="${PKGDIR:-$(cat "${MAKECONF_PATH}" | grep 'PKGDIR=' | cut -d '"' -f2)}"
+		export PKGDIR="${PKGDIR:-$(portageq pkgdir 2>/dev/null)}"
+		export PKGDIR="${PKGDIR:-/var/cache/binpkgs}"
 	else
                 eerror "The file does not match the pattern of environment script"
                 echo "Please consider using avasile to change to one of the modes"
@@ -184,13 +185,19 @@ set_var_cache_dir() {
     if [ -e "${MAKECONF_PATH}" ] ; then
         . "${MAKECONF_PATH}"
         if [ -z "${PKGDIR}" ]; then
-            export PKGDIR="$(cat "${MAKECONF_PATH}" | grep 'PKGDIR=' | cut -d '"' -f2)"
+            export PKGDIR="$(portageq pkgdir 2>/dev/null)"
+        fi
+        if [ -z "${PKGDIR}" ]; then
+            export PKGDIR="/var/cache/binpkgs"
         fi
         if [ -z "${DISTDIR}" ]; then
-            export DISTDIR="$(cat "${MAKECONF_PATH}" | grep 'DISTDIR=' | cut -d '"' -f2)"
+            export DISTDIR="$(portageq distdir 2>/dev/null)"
+        fi
+        if [ -z "${DISTDIR}" ]; then
+            export DISTDIR="/var/cache/distfiles"
         fi
         if [ -z "${PORTAGE_GROUP}" ]; then
-            export PORTAGE_GROUP="$(cat "${MAKECONF_PATH}" | grep 'PORTAGE_GROUP=' | cut -d '"' -f2)"
+            export PORTAGE_GROUP="portage"
         fi
         else
         eerror "The file does not match the pattern of environment script"
@@ -200,25 +207,31 @@ set_var_cache_dir() {
 
 	echo " "
 
-	if [ ! -e "${PKGDIR}"  ] ; then
-		mkdir -p "${PKGDIR}"
-		if [ $( stat -c "%G" "${PKGDIR}" ) != "${PORTAGE_GROUP}" ] ; then
-			eerror "Please make sure you set $PKGDIR ownership to $PORTAGE_GROUP"
-			echo " "
-			eerror "Run command: "$COLOR_ON"chgrp $PORTAGE_GROUP {${PKGDIR},${DISTDIR}} "$COLOR_OFF""
-			echo " "
-			eerror "You can safely cancel now, and run the blue command from above"
-			echo " "
+
+	if grep -q 'PKGDIR=' "${MAKECONF_PATH}" 2>/dev/null; then
+		if [ ! -e "${PKGDIR}" ] ; then
+			mkdir -p "${PKGDIR}"
+			if [ "$( stat -c "%G" "${PKGDIR}" )" != "${PORTAGE_GROUP}" ] ; then
+				eerror "Please make sure you set $PKGDIR ownership to $PORTAGE_GROUP"
+				echo " "
+				eerror "Run command: "$COLOR_ON"chgrp $PORTAGE_GROUP {${PKGDIR},${DISTDIR}} "$COLOR_OFF""
+				echo " "
+				eerror "You can safely cancel now, and run the blue command from above"
+				echo " "
+			fi
 		fi
 	fi
 
-	if [ ! -e "${DISTDIR}"  ] ; then
-		mkdir -p "${DISTDIR}"
-		if [ $( stat -c "%G" "${DISTDIR}" ) != "${PORTAGE_GROUP}" ] ; then
-			eerror "Please make sure you set $DISTDIR ownership to $PORTAGE_GROUP"
-			echo " "
-			eerror "Run command: "$COLOR_ON"chgrp $PORTAGE_GROUP {${PKGDIR},${DISTDIR}} "$COLOR_OFF""
-			echo " "
+
+	if grep -q 'DISTDIR=' "${MAKECONF_PATH}" 2>/dev/null; then
+		if [ ! -e "${DISTDIR}" ] ; then
+			mkdir -p "${DISTDIR}"
+			if [ "$( stat -c "%G" "${DISTDIR}" )" != "${PORTAGE_GROUP}" ] ; then
+				eerror "Please make sure you set $DISTDIR ownership to $PORTAGE_GROUP"
+				echo " "
+				eerror "Run command: "$COLOR_ON"chgrp $PORTAGE_GROUP {${PKGDIR},${DISTDIR}} "$COLOR_OFF""
+				echo " "
+			fi
 		fi
 	fi
 }
@@ -425,6 +438,7 @@ cleanoutdated() {
 
 	if [ -d "${PKGDIR}" ] ; then
 		/usr/bin/eclean-pkg
+		echo "Note: remote binary package cache at /var/cache/binhost/ is managed by portage and is not cleaned here."
 	else
 		eerror "No such directory ${PKGDIR}"
 		echo "Please consider: mkdir ${PKGDIR}/"
@@ -445,6 +459,7 @@ cleanlocalpkg() {
 
 	if [ -d "${PKGDIR}" ] ; then
 		rm -rf "${PKGDIR}"/* || exit 1
+		echo "Note: remote binary package cache at /var/cache/binhost/ is managed by portage and is not affected by this command."
 	else
 		eerror "No such directory ${PKGDIR}"
 		echo "Make sure you have this directory"
@@ -779,9 +794,11 @@ fetchbinpkg() {
 	if [[ "$(readlink -f "${MAKECONF_PATH}")" = "/opt/argentws-build/conf/intel/portage/make.conf.amd64-user" ]] ; then
 		eerror "Fetching binary package(s) from remote"
 		sleep 2
-		EMERGE_DEFAULT_OPTS="--getbinpkgonly --rebuilt-binaries" emerge --fetchonly "$@"
+		emaint binhost -f
+		EMERGE_DEFAULT_OPTS="--getbinpkgonly" emerge --fetchonly "$@"
 	else
-		EMERGE_DEFAULT_OPTS="--getbinpkgonly --rebuilt-binaries" emerge --fetchonly "$@"
+		emaint binhost -f
+		EMERGE_DEFAULT_OPTS="--getbinpkgonly" emerge --fetchonly "$@"
 	fi
 
 	# regenerating environment here is a must!

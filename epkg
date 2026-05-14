@@ -35,21 +35,17 @@ case "$action" in
 			FEATURES="parallel-fetch -collision-protect -protect-owned candy compressdebug splitdebug" emerge -av "$@"
 		fi
 		;;
-	# highly experimental
 	install-bin-pkg|ibin)
 		if [ "$1" == "--check" ] ; then
 			checksync
 			shift
 			emaint binhost -f
-			EMERGE_DEFAULT_OPTS="${EMERGE_DEFAULT_OPTS} --getbinpkgonly " emerge -Kqa --fetchonly "$@"
-			qmerge -q "$@"
-			echo "Don't forget to run 'eclean packages' to clean /var/cache/binpkgs"
+			emerge -gKqa "$@"
 		else
 			emaint binhost -f
-			EMERGE_DEFAULT_OPTS="${EMERGE_DEFAULT_OPTS} --getbinpkgonly " emerge -Kqa --fetchonly "$@"
-			qmerge -q "$@"
-			echo "Don't forget to run 'eclean packages' to clean /var/cache/binpkgs"
+			emerge -gKqa "$@"
 		fi
+		echo "Don't forget to run 'eclean-pkg' to clean /var/cache/binhost/"
 		;;
 	remove|r)
         if [ "$1" == "--check" ] ; then
@@ -88,6 +84,7 @@ case "$action" in
 		else
 			emerge --depclean -av
 		fi
+		echo -e "Don't forget to run '${ENABLE_COLOR}etc-update${DISABLE_COLOR}' and accept remote changes from Argent!"
 		;;
 	cleanoutdated)
 		cleanoutdated
@@ -99,13 +96,13 @@ case "$action" in
 		if [ "$1" == "--check" ] ; then
 			checksync
 			shift
-			PKGDIR="${PKGDIR:-}" DISTDIR="${DISTDIR:-}" set_var_cache_dir
 			emerge -uDaN @system @world "$@"
-			echo "Don't forget to do 'epkg clean' every time you do a upgrade!"
+			echo -e "Don't forget to do '${ENABLE_COLOR}epkg clean${DISABLE_COLOR}' every time you do a upgrade!"
+			echo -e "Don't forget to run '${ENABLE_COLOR}etc-update${DISABLE_COLOR}' and accept remote changes from Argent!"
 		else
-			PKGDIR="${PKGDIR:-}" DISTDIR="${DISTDIR:-}" set_var_cache_dir
 			emerge -uDaN @system @world "$@"
-			echo "Don't forget to do 'epkg clean' every time you do a upgrade!"
+			echo -e "Don't forget to do '${ENABLE_COLOR}epkg clean${DISABLE_COLOR}' every time you do a upgrade!"
+			echo -e "Don't forget to run '${ENABLE_COLOR}etc-update${DISABLE_COLOR}' and accept remote changes from Argent!"
 		fi
 		;;
 	upgrade-full|ugf)
@@ -113,10 +110,12 @@ case "$action" in
 			checksync
 			shift
 			emerge -uDvaN --with-bdeps=y @system @world "$@" --backtrack=150
-			echo "Don't forget to do 'epkg clean' every time you do a upgrade!"
+			echo -e "Don't forget to do '${ENABLE_COLOR}epkg clean${DISABLE_COLOR}' every time you do a upgrade!"
+			echo -e "Don't forget to run '${ENABLE_COLOR}etc-update${DISABLE_COLOR}' and accept remote changes from Argent!"
 		else
 			emerge -uDvaN --with-bdeps=y @system @world "$@" --backtrack=150
-			echo "Don't forget to do 'epkg clean' every time you do a upgrade!"
+			echo -e "Don't forget to do '${ENABLE_COLOR}epkg clean${DISABLE_COLOR}' every time you do a upgrade!"
+			echo -e "Don't forget to run '${ENABLE_COLOR}etc-update${DISABLE_COLOR}' and accept remote changes from Argent!"
 		fi
 		;;
 	upgrade-specific)
@@ -124,16 +123,19 @@ case "$action" in
             checksync
             shift
             emerge -uDvaN "$@" --backtrack=150
-			echo "Don't forget to do 'epkg clean' every time you do a upgrade!"
+			echo -e "Don't forget to do '${ENABLE_COLOR}epkg clean${DISABLE_COLOR}' every time you do a upgrade!"
+			echo -e "Don't forget to run '${ENABLE_COLOR}etc-update${DISABLE_COLOR}' and accept remote changes from Argent!"
         else
             emerge -uDvaN "$@" --backtrack=150
-			echo "Don't forget to do 'epkg clean' every time you do a upgrade!"
+			echo -e "Don't forget to do '${ENABLE_COLOR}epkg clean${DISABLE_COLOR}' every time you do a upgrade!"
+			echo -e "Don't forget to run '${ENABLE_COLOR}etc-update${DISABLE_COLOR}' and accept remote changes from Argent!"
         fi
 		;;
 	upgrade-nocol)
 		checksync
 		FEATURES="parallel-fetch -collision-protect -protect-owned candy compressdebug splitdebug" emerge -uDvaN --with-bdeps=y @system @world "$@" --backtrack=150
-		echo "Don't forget to do 'epkg clean' every time you do a upgrade!"
+		echo -e "Don't forget to do '${ENABLE_COLOR}epkg clean${DISABLE_COLOR}' every time you do a upgrade!"
+		echo -e "Don't forget to run '${ENABLE_COLOR}etc-update${DISABLE_COLOR}' and accept remote changes from Argent!"
 		;;
 	autoinstall|ai)
 		if [ "$1" == "--update" ] ; then
@@ -164,15 +166,12 @@ case "$action" in
 			fi
 			shift
 			emaint binhost -f
-			EMERGE_DEFAULT_OPTS="${EMERGE_DEFAULT_OPTS} --getbinpkgonly " emerge -Kq --fetchonly "$@"
-			qmerge -yq "$@"
-			echo "Don't forget to run 'eclean packages' to clean /var/cache/binpkgs"
+			emerge -gKq "$@"
 		else
 			emaint binhost -f
-			EMERGE_DEFAULT_OPTS="${EMERGE_DEFAULT_OPTS} --getbinpkgonly " emerge -Kq --fetchonly "$@"
-			qmerge -yq "$@"
-			echo "Don't forget to run 'eclean packages' to clean /var/cache/binpkgs"
+			emerge -gKq "$@"
 		fi
+		echo "Don't forget to run 'eclean-pkg' to clean /var/cache/binhost/"
 		;;
 	autoremove|ar)
 		if [ "$1" == "--update" ] ; then
@@ -305,6 +304,7 @@ case "$action" in
 		else
 			emerge --depclean -q
 		fi
+		echo -e "Don't forget to run '${ENABLE_COLOR}etc-update${DISABLE_COLOR}' and accept remote changes from Argent!"
 		;;
 	autobuildpkgonly)
         if [ "$1" == "--update" ] ; then
@@ -324,10 +324,12 @@ case "$action" in
 			fi
 			shift
 			emerge -uDN @system @world "$@"
-			echo "Don't forget to do 'epkg clean' every time you do a upgrade!"
+			echo -e "Don't forget to do '${ENABLE_COLOR}epkg clean${DISABLE_COLOR}' every time you do a upgrade!"
+			echo -e "Don't forget to run '${ENABLE_COLOR}etc-update${DISABLE_COLOR}' and accept remote changes from Argent!"
 		else
 			emerge -uDN @system @world "$@"
-			echo "Don't forget to do 'epkg clean' every time you do a upgrade!"
+			echo -e "Don't forget to do '${ENABLE_COLOR}epkg clean${DISABLE_COLOR}' every time you do a upgrade!"
+			echo -e "Don't forget to run '${ENABLE_COLOR}etc-update${DISABLE_COLOR}' and accept remote changes from Argent!"
 		fi
 		;;
 	autoupgrade-full|augf)
@@ -338,10 +340,12 @@ case "$action" in
 			fi
 			shift
 			emerge -uDvN --with-bdeps=y @system @world "$@"
-			echo "Don't forget to do 'epkg clean' every time you do a upgrade!"
+			echo -e "Don't forget to do '${ENABLE_COLOR}epkg clean${DISABLE_COLOR}' every time you do a upgrade!"
+			echo -e "Don't forget to run '${ENABLE_COLOR}etc-update${DISABLE_COLOR}' and accept remote changes from Argent!"
 		else
 			emerge -uDvN --with-bdeps=y @system @world "$@"
-			echo "Don't forget to do 'epkg clean' every time you do a upgrade!"
+			echo -e "Don't forget to do '${ENABLE_COLOR}epkg clean${DISABLE_COLOR}' every time you do a upgrade!"
+			echo -e "Don't forget to run '${ENABLE_COLOR}etc-update${DISABLE_COLOR}' and accept remote changes from Argent!"
 		fi
 		;;
 	autoupgrade-nocol)
@@ -349,11 +353,13 @@ case "$action" in
 			fetchminimalsync
 		fi
 		FEATURES="parallel-fetch -collision-protect -protect-owned candy compressdebug splitdebug" emerge -uDvN --with-bdeps=y @system @world "$@"
-		echo "Don't forget to do 'epkg clean' every time you do a upgrade!"
+		echo -e "Don't forget to do '${ENABLE_COLOR}epkg clean${DISABLE_COLOR}' every time you do a upgrade!"
+		echo -e "Don't forget to run '${ENABLE_COLOR}etc-update${DISABLE_COLOR}' and accept remote changes from Argent!"
 		;;
 	upgrade-specific)
 		emerge -uDvN "$@"
-		echo "Don't forget to do 'epkg clean' every time you do a upgrade!"
+		echo -e "Don't forget to do '${ENABLE_COLOR}epkg clean${DISABLE_COLOR}' every time you do a upgrade!"
+		echo -e "Don't forget to run '${ENABLE_COLOR}etc-update${DISABLE_COLOR}' and accept remote changes from Argent!"
 		;;
 	remove-orphans)
 		remove_orphans
@@ -368,7 +374,6 @@ case "$action" in
 		emerge -s "$@"
 		;;
     update|u)
-        PKGDIR="${PKGDIR:-}" DISTDIR="${DISTDIR:-}" set_var_cache_dir
         if [ "$1" == "--clean" ] ; then
             shift
             if [[ "${EPKG_DISTRO_SET}" == "argent" ]]; then
