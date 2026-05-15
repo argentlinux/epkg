@@ -1,7 +1,6 @@
-# Copyright Argent Linux Authors 2015-2025
-# License: GPLv2
-
 #!/usr/bin/env bash
+# Copyright Argent Linux Authors 2015-2026
+# License: GPLv2
 
 source /usr/lib64/epkg/libepkg
 
@@ -71,6 +70,7 @@ case "$action" in
 	forceremove)
 		if [ "$1" == "--check" ] ; then
 			checksync
+			shift
 			emerge --unmerge -av "$@"
 		else
 			emerge --unmerge -av "$@"
@@ -356,7 +356,7 @@ case "$action" in
 		echo -e "Don't forget to do '${ENABLE_COLOR}epkg clean${DISABLE_COLOR}' every time you do a upgrade!"
 		echo -e "Don't forget to run '${ENABLE_COLOR}etc-update${DISABLE_COLOR}' and accept remote changes from Argent!"
 		;;
-	upgrade-specific)
+	autoupgrade-specific)
 		emerge -uDvN "$@"
 		echo -e "Don't forget to do '${ENABLE_COLOR}epkg clean${DISABLE_COLOR}' every time you do a upgrade!"
 		echo -e "Don't forget to run '${ENABLE_COLOR}etc-update${DISABLE_COLOR}' and accept remote changes from Argent!"
@@ -452,8 +452,8 @@ case "$action" in
 				buildpkgonly - Build/Recompile package(s) and export them locally ( usually in /usr/portage/packages )
 				buildinstall - Recompile/Build package(s) and install them immediately ( usually in /usr/portage/packages )
 
-				autoupgrade|ug - Upgrade system (no confirmation). No build dependencies are upgraded
-				autoupgrade-full|ugf - Upgrade system ( no confirmation ). All build dependencies included for upgrade
+				autoupgrade|aug - Upgrade system (no confirmation). No build dependencies are upgraded
+				autoupgrade-full|augf - Upgrade system ( no confirmation ). All build dependencies included for upgrade
 				autoupgrade-nocol - Upgrade system without collision protection ( no confirmation )
 				autoupgrade-specific - Upgrade specific package(s) ( no confirmation )
 

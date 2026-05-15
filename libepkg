@@ -1,7 +1,6 @@
-# Copyright Argent Linux Authors 2015-2025
-# License: GPLv2
-
 #!/usr/bin/env bash
+# Copyright Argent Linux Authors 2015-2026
+# License: GPLv2
 
 if [[ -d "/etc/portage/make.conf" ]]; then
     [[ -e "/etc/portage/make.conf/main.conf" ]] \
@@ -55,11 +54,7 @@ checkportageconfig() {
 	# running update on argent specific gentoo settings
 
 	pushd /opt/argentws-build > /dev/null 2>&1 || return
-	git remote update > /dev/null 2>&1
 
-	CONFHASH=$(git rev-parse @)
-	RCONFHASH=$(git rev-parse @{u})
-	
 	if [[ ! -e .git ]] ; then
 		echo -e ""
 		eerror "You do not have any connection with the Argent main server"
@@ -68,7 +63,16 @@ checkportageconfig() {
 		eerror "Or use ""$ENABLE_COLOR""avasile""$DISABLE_COLOR"" to switch stance"
 		eerror "Ignoring local changes."
 		echo -e ""
-	elif [ "${CONFHASH}" != "${RCONFHASH}" ] ; then
+		popd > /dev/null 2>&1
+		return
+	fi
+
+	git remote update > /dev/null 2>&1
+
+	CONFHASH=$(git rev-parse @)
+	RCONFHASH=$(git rev-parse @{u})
+
+	if [ "${CONFHASH}" != "${RCONFHASH}" ] ; then
 		eerror "portage config is out of date, run "epkg update" first"
 	fi
 	popd > /dev/null 2>&1
@@ -154,7 +158,7 @@ checkportdir() {
 
 checksync() {
     if [[ "${EPKG_DISTRO_SET}" == "argent" ]]; then
-        if [ -d "/opt/argentws-build/.git" ]; then
+        if [ -d "${PORTAGE_DIR}/.git" ]; then
             checkportagetree
         else
 		ewarn "No portage tree found, you should fetch minimal portage tree via epkg update"
@@ -171,11 +175,15 @@ checksync() {
 }
 
 syncrepos() {
-	if [[ -e "/etc/portage/repos.conf/layman.conf" ]] && [[ "$(cat /etc/portage/repos.conf/layman.conf | grep argent-ws )" ]] ; then
+	if [[ -e "/etc/portage/repos.conf/layman.conf" ]] && grep -q 'argent-ws' /etc/portage/repos.conf/layman.conf ; then
 		sed -i 's|auto-sync = No|auto-sync = yes|g' /etc/portage/repos.conf/layman.conf
 	fi
 
-	emerge --sync
+	if ! emerge --sync ; then
+		echo -e "${ENABLE_COLOR}Warning: 'emerge --sync' failed (possibly due to a broken third-party repository). Falling back to syncing Argent-specific repositories only.${DISABLE_COLOR}"
+		emerge --sync gentoo
+		emerge --sync argent-ws
+	fi
 }
 
 set_var_cache_dir() {
@@ -268,7 +276,7 @@ fetchminimalsync() {
                 echo ".gitignore" >> .git/info/sparse-checkout
                 git pull --depth=1 origin master
                 git branch -u origin/master master
-                rm -rf ""${PORTAGE_DIR}"/profiles/updates"
+                rm -rf "${PORTAGE_DIR}/profiles/updates"
         else
         # We need minimal git pull if the folder really exists
         pushd "${PORTAGE_DIR}" > /dev/null 2>&1 || return
@@ -279,7 +287,7 @@ fetchminimalsync() {
         popd || return
     fi
 
-    if [[ ! -d ""${ARGENT_OVERLAY}"/.git" ]] ; then
+    if [[ ! -d "${ARGENT_OVERLAY}/.git" ]] ; then
         einfo "Injecting usermode argent-ws overlay"
         cd "${ARGENT_OVERLAY}" && git init > /dev/null 2>&1
         git remote add origin https://gitlab.com/argent/argent-ws.git
@@ -386,7 +394,7 @@ backupallpkg() {
 	# function to *backup all packages in the system* for future use
 
 	# the unconventional way here: we import /etc/portage/make.conf into current local function
-	if [[ -z "$@" ]] ; then
+	if [[ $# -eq 0 ]] ; then
 		eerror "You have not specified any package to backup"
 		echo " "
     	exit 1
@@ -595,13 +603,13 @@ recompile_depend() {
     equery d "${new_args[@]}" | awk '{print $1}' | sed -e 's/^/=/' >> "$temp_list"
 
     if [[ -s "$temp_list" ]]; then
-        local exclude_str=""
+        local exclude_args=()
         if [[ ${#exclude_packages[@]} -gt 0 ]]; then
             for pkg in "${exclude_packages[@]}"; do
-                exclude_str+="--exclude ${pkg} "
+                exclude_args+=("--exclude" "${pkg}")
             done
         fi
-        EMERGE_DEFAULT_OPTS="--rebuilt-binaries" emerge --oneshot -va --keep-going $(cat "$temp_list") $exclude_str
+        EMERGE_DEFAULT_OPTS="--rebuilt-binaries" emerge --oneshot -va --keep-going $(cat "$temp_list") "${exclude_args[@]}"
     else
         echo "There are no packages that depend on given package(s)"
     fi
@@ -673,13 +681,13 @@ autorecompile_depend() {
     equery d "${new_args[@]}" | awk '{print $1}' | sed -e 's/^/=/' >> "$temp_list"
 
     if [[ -s "$temp_list" ]]; then
-        local exclude_str=""
+        local exclude_args=()
         if [[ ${#exclude_packages[@]} -gt 0 ]]; then
             for pkg in "${exclude_packages[@]}"; do
-                exclude_str+="--exclude ${pkg} "
+                exclude_args+=("--exclude" "${pkg}")
             done
         fi
-        EMERGE_DEFAULT_OPTS="--rebuilt-binaries" emerge -v --oneshot --keep-going $(cat "$temp_list") $exclude_str
+        EMERGE_DEFAULT_OPTS="--rebuilt-binaries" emerge -v --oneshot --keep-going $(cat "$temp_list") "${exclude_args[@]}"
     else
         echo "There are no packages that depend on given package(s)"
     fi
@@ -708,7 +716,7 @@ autorecompile_depend_new() {
     for i in $(equery d "$@" | awk '{print $1}') ; do echo =${i} >> "$temp_list" ; done
 
     if [[ -s "$temp_list" ]] ; then
-        EMERGE_DEFAULT_OPTS="--rebuilt-binaries" emerge -v $(cat "$temp_list")
+        EMERGE_DEFAULT_OPTS="--rebuilt-binaries" emerge --oneshot -v $(cat "$temp_list")
     else
         echo "There are no packages that depend on given package(s)"
     fi
@@ -729,13 +737,21 @@ reinstall_depend() {
 		cat /dev/null > /tmp/epkg_temporary_list
 		# shellcheck disable=SC2283
 		for i in $(equery d "$@" | awk '{print $1}') ; do echo =${i} >> /tmp/epkg_temporary_list ; done
-		emerge -va $( cat /tmp/epkg_temporary_list )
+		if [[ -s /tmp/epkg_temporary_list ]] ; then
+			emerge -va $( cat /tmp/epkg_temporary_list )
+		else
+			echo "There are no packages that depend on given package(s)"
+		fi
 		rm -f /tmp/epkg_temporary_list || exit 1
 	else
 		cat /dev/null > /tmp/epkg_temporary_list
 		# shellcheck disable=SC2283
 		for i in $(equery d "$@" | awk '{print $1}') ; do echo =${i} >> /tmp/epkg_temporary_list ; done
-		emerge -va $( cat /tmp/epkg_temporary_list )
+		if [[ -s /tmp/epkg_temporary_list ]] ; then
+			emerge -va $( cat /tmp/epkg_temporary_list )
+		else
+			echo "There are no packages that depend on given package(s)"
+		fi
 		rm -f /tmp/epkg_temporary_list || exit 1
 	fi
 }
@@ -750,13 +766,21 @@ autoreinstall_depend() {
 		cat /dev/null > /tmp/epkg_temporary_list
 		# shellcheck disable=SC2283
 		for i in $(equery d "$@" | awk '{print $1}') ; do echo =${i} >> /tmp/epkg_temporary_list ; done
-		emerge -v $( cat /tmp/epkg_temporary_list )
+		if [[ -s /tmp/epkg_temporary_list ]] ; then
+			emerge -v $( cat /tmp/epkg_temporary_list )
+		else
+			echo "There are no packages that depend on given package(s)"
+		fi
 		rm -f /tmp/epkg_temporary_list || exit 1
 	else
 		cat /dev/null > /tmp/epkg_temporary_list
 		# shellcheck disable=SC2283
 		for i in $(equery d "$@" | awk '{print $1}') ; do echo =${i} >> /tmp/epkg_temporary_list ; done
-		emerge -v $( cat /tmp/epkg_temporary_list )
+		if [[ -s /tmp/epkg_temporary_list ]] ; then
+			emerge -v $( cat /tmp/epkg_temporary_list )
+		else
+			echo "There are no packages that depend on given package(s)"
+		fi
 		rm -f /tmp/epkg_temporary_list || exit 1
 	fi
 }
@@ -818,7 +842,7 @@ buildinstall() {
 	# Stands for build (-Bv) and install (-va with --getbinpkg)
 	# Also regenerates the binhost Packages file
 
-	if [[ -z "$@" ]] ; then
+	if [[ $# -eq 0 ]] ; then
 		eerror "You have not specified any package to build & install"
 		echo " "
 		exit 1
@@ -843,7 +867,7 @@ autobuildinstall() {
 	# Stands for build (-Bv) and install (-va with --getbinpkg) automatically
 	# Also regenerates the binhost Packages file
 
-	if [[ -z "$@" ]] ; then
+	if [[ $# -eq 0 ]] ; then
 		eerror "You have not specified any package to build & install"
 		echo " "
 		exit 1
