@@ -188,7 +188,7 @@ case "$action" in
 		reinstall_depend "$@"
 		;;
 	backupallpkg)
-		PKGDIR="${PKGDIR:-}" backupallpkg $( qlist -IvC ) "$@"
+		PKGDIR="${PKGDIR:-}" backupallpkg "$( qlist -IvC )" "$@"
 		;;
 	module-rebuild)
 		EMERGE_DEFAULT_OPTS="--rebuilt-binaries " emerge -av1 @module-rebuild
@@ -396,6 +396,9 @@ case "$action" in
 	force-sync)
 		forcesync
 		;;
+	regen-keys)
+		regen_pkg_keys
+		;;
 	sysinfo)
 		emerge --info
 		;;
@@ -476,6 +479,7 @@ case "$action" in
 				fetchsourcepkg - Downloads the source of the program. Usually in /usr/portage/distfiles/
 				search - Search for packages
 				update - Resync portage tree, portage config && argent-ws overlay
+				regen-keys - Rebuild the local binpkg signature keyring (/etc/portage/gnupg) via getuto
 				sysinfo - Display information about installed core packages and portage configuration
 				resume - Resume the last failed emerge operation(s)
 				oneshot|o - Install package(s) as one-shot package(s)

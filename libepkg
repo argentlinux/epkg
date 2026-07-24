@@ -259,6 +259,23 @@ forcesync() {
 	popd || return
 }
 
+refresh_pkg_keys() {
+	if command -v getuto > /dev/null 2>&1 ; then
+		getuto || ewarn "getuto could not refresh the binpkg signature keyring"
+	fi
+}
+
+regen_pkg_keys() {
+	einfo "Regenerating /etc/portage/gnupg (binpkg signature keyring)"
+	rm -rf /etc/portage/gnupg
+	if command -v getuto > /dev/null 2>&1 ; then
+		getuto -v
+	else
+		eerror "app-portage/getuto not found; cannot regenerate keyring"
+		return 1
+	fi
+}
+
 fetchminimalsync() {
         # fetch minimal portage tree
         # in usermode we don't want the whole tree of gentoo ebuilds
@@ -318,6 +335,8 @@ fetchminimalsync() {
         git clean -fd
         git gc --prune=now
     popd || return
+
+    refresh_pkg_keys
 }
 
 git_clean_history() {
