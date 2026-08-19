@@ -215,9 +215,17 @@ case "$action" in
 		fi
 		;;
 	recompile-depend)
+		if [[ "${1}" == "--update" ]] ; then
+			argentsync
+			shift
+		fi
 		recompile_depend "$@"
 		;;
 	recompile-depend-new)
+		if [[ "${1}" == "--update" ]] ; then
+			argentsync
+			shift
+		fi
 		recompile_depend_new "$@"
 		;;
 	src-newuse)
@@ -278,10 +286,17 @@ case "$action" in
 		fi
 		;;
 	autorecompile-depend)
+		if [[ "${1}" == "--update" ]] ; then
+			argentsync
+			shift
+		fi
 		autorecompile_depend "$@"
 		;;
 	autorecompile-depend-new)
-		cleanoutdated
+		if [[ "${1}" == "--update" ]] ; then
+			argentsync
+			shift
+		fi
 		autorecompile_depend_new "$@"
 		;;
 	autorecompileallpkg)
@@ -451,7 +466,8 @@ case "$action" in
 				recompilepkg - Recompile and install packages with self-defined options ( man portage )
 				recompileallpkg - Recompile, install and save all the packages locally ( usually in /usr/portage/packages/ )
 				recompile-depend - Compile/Recompile all currently installed packages that depend on given package(s)
-				recompile-depend-new - Compile/Recompile all newly installed packages that depend on given package(s)
+				                   accepts --exclude <package name or slot atom>, repeatable, and --update
+				recompile-depend-new - Alias of recompile-depend, kept for backwards compatibility
 				buildpkgonly - Build/Recompile package(s) and export them locally ( usually in /usr/portage/packages )
 				buildinstall - Recompile/Build package(s) and install them immediately ( usually in /usr/portage/packages )
 
@@ -465,7 +481,8 @@ case "$action" in
 				autorecompilepkg - Recompile packages with self-defined options ( no confirmation )
 				autorecompileallpkg - Recompile and save all the packages in the system ( no confirmation )
 				autorecompile-depend - Compile/Recompile all currently installed packages that depend on given package(s) ( no confirmation )
-				autorecompile-depend-new - Compile/Recompile all newly-installed packages that depend on given package(s) ( no confirmation )
+				                       accepts --exclude <package name or slot atom>, repeatable, and --update
+				autorecompile-depend-new - Alias of autorecompile-depend, kept for backwards compatibility
 				autoforceremove - *Unsafely* remove packages (no confirmation)
 				autocompile-preserved - Recompile packages that are categorized as preserved-rebuilds
 				automodule-rebuild - Rebuild all kernel modules that are currently installed ( no confirmation )
