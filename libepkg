@@ -589,6 +589,161 @@ autorecompileallpkg() {
 	fi
 }
 
+# pseudo-portage checks for ebuilds, skips if given packagename is not found in the ebuilds
+# filters the best version + revision, checks for missing ebuilds, install whatever is left
+# 'if' something is left
+_ebuild_exists() {
+
+    local repo
+    for repo in "${repo_paths[@]}" ; do
+        if [[ -f "${repo}/${1}/${2}/${2}-${3}.ebuild" ]] ; then
+            return 0
+        fi
+    done
+
+    return 1
+}
+
+_best_same_version_revision() {
+
+    local repo ebuild base rev
+    local best_rev=-1
+    local installed_rev=0
+
+    if [[ "${4}" =~ -r([0-9]+)$ ]] ; then
+        installed_rev="${BASH_REMATCH[1]}"
+    fi
+
+    for repo in "${repo_paths[@]}" ; do
+        for ebuild in "${repo}/${1}/${2}/${2}-${3}"*.ebuild ; do
+            [[ -f "${ebuild}" ]] || continue
+            base="${ebuild##*/}"
+            base="${base%.ebuild}"
+
+            if [[ "${base}" == "${2}-${3}" ]] ; then
+                rev=0
+            elif [[ "${base}" =~ ^"${2}-${3}"-r([0-9]+)$ ]] ; then
+                rev="${BASH_REMATCH[1]}"
+            else
+                continue
+            fi
+
+            if [[ ${rev} -gt ${best_rev} ]] ; then
+                best_rev="${rev}"
+            fi
+        done
+    done
+
+    if [[ ${best_rev} -gt ${installed_rev} ]] ; then
+        echo "${3}-r${best_rev}"
+    fi
+}
+
+_report_missing_ebuild() {
+
+    local repo ebuild base vdb_repo=""
+    local versions=()
+
+    if [[ -f "/var/db/pkg/${1}/${2}-${3}/repository" ]] ; then
+        read -r vdb_repo < "/var/db/pkg/${1}/${2}-${3}/repository"
+    fi
+
+    for repo in "${repo_paths[@]}" ; do
+        for ebuild in "${repo}/${1}/${2}/"*.ebuild ; do
+            [[ -f "${ebuild}" ]] || continue
+            base="${ebuild##*/}"
+            base="${base%.ebuild}"
+            versions+=("${base#"${2}"-}")
+        done
+    done
+
+    if [[ -n "${vdb_repo}" ]] ; then
+        ewarn "  installed from repo '${vdb_repo}'"
+    fi
+
+    if [[ ${#versions[@]} -gt 0 ]] ; then
+        ewarn "  versions still available: $(printf '%s\n' "${versions[@]}" | sort -V | tail -5 | tr '\n' ' ')"
+        ewarn "  run 'epkg update', or upgrade it: epkg install ${1}/${2}"
+    else
+        ewarn "  no longer present in any repo"
+        ewarn "  run 'epkg update', or unmerge it: epkg remove =${1}/${2}-${3}"
+    fi
+}
+
+_filter_depend_atoms() {
+
+
+    local list_file="${1}"
+
+    [[ -s "${list_file}" ]] || return 0
+
+    if ! command -v qatom > /dev/null 2>&1 ; then
+        return 0
+    fi
+
+    local repo_paths=()
+    local repo repo_path
+    for repo in $(portageq get_repos / 2>/dev/null) ; do
+        repo_path="$(portageq get_repo_path / "${repo}" 2>/dev/null)"
+        [[ -d "${repo_path}" ]] && repo_paths+=("${repo_path}")
+    done
+
+    if [[ ${#repo_paths[@]} -eq 0 ]] ; then
+        return 0
+    fi
+
+    local split_file
+    if ! split_file="$(mktemp "${TMPDIR:-/tmp}/epkg_atom_split.XXXXXXXX")" ; then
+        return 0
+    fi
+
+    xargs qatom -C -F '%{CATEGORY}|%{PN}|%{PV}|%{PVR}' < "${list_file}" > "${split_file}" 2>/dev/null
+
+    local kept=()
+    local substituted=0
+    local dropped=0
+    local category name version version_rev best
+
+    while IFS='|' read -r category name version version_rev ; do
+        [[ -n "${category}" && -n "${name}" && -n "${version_rev}" ]] || continue
+
+        if _ebuild_exists "${category}" "${name}" "${version_rev}" ; then
+            kept+=("=${category}/${name}-${version_rev}")
+            continue
+        fi
+
+        best="$(_best_same_version_revision "${category}" "${name}" "${version}" "${version_rev}")"
+        if [[ -n "${best}" ]] ; then
+            ewarn "${category}/${name}-${version_rev} has no ebuild, using =${category}/${name}-${best} (revision bump)"
+            kept+=("=${category}/${name}-${best}")
+            substituted=$((substituted + 1))
+            continue
+        fi
+
+        ewarn "${category}/${name}-${version_rev} has no ebuild in any repo, skipping"
+        _report_missing_ebuild "${category}" "${name}" "${version_rev}"
+        dropped=$((dropped + 1))
+    done < "${split_file}"
+
+    rm -f "${split_file}"
+
+    if [[ ${#kept[@]} -gt 0 ]] ; then
+        printf '%s\n' "${kept[@]}" > "${list_file}"
+    else
+        : > "${list_file}"
+    fi
+
+    if [[ ${substituted} -gt 0 || ${dropped} -gt 0 ]] ; then
+        einfo "${#kept[@]} package(s) to rebuild, ${substituted} substituted, ${dropped} skipped"
+    fi
+
+    if [[ ${dropped} -gt 0 ]] ; then
+        return 2
+    fi
+
+    return 0
+}
+
 _recompile_depend() {
 	# simplified implementation for recompile-depend.
 	# purpose is to collect a list of of all packages that depend on given
@@ -603,9 +758,14 @@ _recompile_depend() {
 
     local exclude_packages=()
     local targets=()
+    local strict_mode="no"
 
     while [[ $# -gt 0 ]] ; do
         case "${1}" in
+            --strict)
+                strict_mode="yes"
+                shift
+                ;;
             --exclude)
                 if [[ -n "${2}" ]] ; then
                     exclude_packages+=("${2}")
@@ -621,7 +781,7 @@ _recompile_depend() {
                 ;;
             --*)
                 eerror "Unknown option: ${1}"
-                eerror "Only --exclude <package name or slot atom> is accepted here"
+                eerror "Only --exclude <package name or slot atom> and --strict are accepted here"
                 return 1
                 ;;
             *)
@@ -662,23 +822,33 @@ _recompile_depend() {
     equery -q -C depends "${targets[@]}" | awk 'NF {print "=" $1}' | sort -u > "${temp_list}"
 
     local ret=0
+    local filter_rc=0
     if [[ -s "${temp_list}" ]] ; then
-        local exclude_args=()
-        local pkg
-        for pkg in "${exclude_packages[@]}" ; do
-            exclude_args+=("--exclude" "${pkg}")
-        done
+        _filter_depend_atoms "${temp_list}" || filter_rc=$?
 
-        local ask_opt="-va"
-        if [[ "${ask_mode}" == "noask" ]] ; then
-            ask_opt="-v"
+        if [[ ${filter_rc} -eq 2 && "${strict_mode}" == "yes" ]] ; then
+            eerror "Some packages have no ebuild for the installed version, --strict given"
+            ret=1
+        elif [[ -s "${temp_list}" ]] ; then
+            local exclude_args=()
+            local pkg
+            for pkg in "${exclude_packages[@]}" ; do
+                exclude_args+=("--exclude" "${pkg}")
+            done
+
+            local ask_opt="-va"
+            if [[ "${ask_mode}" == "noask" ]] ; then
+                ask_opt="-v"
+            fi
+
+            local atoms=()
+            mapfile -t atoms < "${temp_list}"
+
+            EMERGE_DEFAULT_OPTS="--rebuilt-binaries" emerge --oneshot "${ask_opt}" --keep-going \
+                "${atoms[@]}" "${exclude_args[@]}" || ret=$?
+        else
+            ewarn "No package left to rebuild"
         fi
-
-        local atoms=()
-        mapfile -t atoms < "${temp_list}"
-
-        EMERGE_DEFAULT_OPTS="--rebuilt-binaries" emerge --oneshot "${ask_opt}" --keep-going \
-            "${atoms[@]}" "${exclude_args[@]}" || ret=$?
     else
         einfo "There are no packages that depend on given package(s)"
     fi
@@ -738,15 +908,21 @@ _reinstall_depend() {
 
 	local ret=0
 	if [[ -s "${temp_list}" ]] ; then
-		local ask_opt="-va"
-		if [[ "${ask_mode}" == "noask" ]] ; then
-			ask_opt="-v"
+		_filter_depend_atoms "${temp_list}"
+
+		if [[ -s "${temp_list}" ]] ; then
+			local ask_opt="-va"
+			if [[ "${ask_mode}" == "noask" ]] ; then
+				ask_opt="-v"
+			fi
+
+			local atoms=()
+			mapfile -t atoms < "${temp_list}"
+
+			emerge "${ask_opt}" "${atoms[@]}" || ret=$?
+		else
+			ewarn "No package left to reinstall"
 		fi
-
-		local atoms=()
-		mapfile -t atoms < "${temp_list}"
-
-		emerge "${ask_opt}" "${atoms[@]}" || ret=$?
 	else
 		einfo "There are no packages that depend on given package(s)"
 	fi
