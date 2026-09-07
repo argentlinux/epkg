@@ -1,4 +1,6 @@
 .idea
+.vscode
+.docker
 ep
 epkg-go
 logs

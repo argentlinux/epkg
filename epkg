@@ -4,9 +4,10 @@
 
 source /usr/lib64/epkg/libepkg
 
-if [[ "$1" != "search" && "$1" != "s" ]]; then
-    checkroot
-fi
+case "$1" in
+	search|s|ibin-search|is|ibin-repos|ibin-info) ;;
+	*) checkroot ;;
+esac
 
 checksystemmode
 
@@ -34,17 +35,33 @@ case "$action" in
 			FEATURES="parallel-fetch -collision-protect -protect-owned candy compressdebug splitdebug" emerge -av "$@"
 		fi
 		;;
-	install-bin-pkg|ibin)
-		if [ "$1" == "--check" ] ; then
-			checksync
-			shift
-			emaint binhost -f
-			emerge -gKqa "$@"
-		else
-			emaint binhost -f
-			emerge -gKqa "$@"
-		fi
-		echo "Don't forget to run 'eclean-pkg' to clean /var/cache/binhost/"
+	install-bin-pkg|ibin|ib)
+		qmerge "$@"
+		;;
+	ibin-update|iup)
+		qmerge -f "$@"
+		;;
+	ibin-upgrade|iug)
+		qmerge -quDN @world "$@"
+		echo -e "Don't forget to run '${ENABLE_COLOR}etc-update${DISABLE_COLOR}' and accept remote changes from Argent!"
+		;;
+	ibin-pretend|ip)
+		qmerge -p "$@"
+		;;
+	ibin-search|is)
+		qmerge -s "$@"
+		;;
+	ibin-remove|ir)
+		qmerge -cq "$@"
+		;;
+	ibin-clean|ic)
+		qmerge -cq "$@"
+		;;
+	ibin-info)
+		qmerge --info "$@"
+		;;
+	ibin-repos)
+		qmerge --repos
 		;;
 	remove|r)
         if [ "$1" == "--check" ] ; then
@@ -159,19 +176,12 @@ case "$action" in
 			FEATURES="parallel-fetch -collision-protect -protect-owned candy compressdebug splitdebug" emerge -v "$@"
 		fi
 		;;
-	autoinstall-bin-pkg|aibin)
-		if [ "$1" == "--update" ] ; then
-			if [[ "${EPKG_DISTRO_SET}" == "argent" ]]; then
-				fetchminimalsync
-			fi
-			shift
-			emaint binhost -f
-			emerge -gKq "$@"
-		else
-			emaint binhost -f
-			emerge -gKq "$@"
-		fi
-		echo "Don't forget to run 'eclean-pkg' to clean /var/cache/binhost/"
+	autoinstall-bin-pkg|aibin|aib)
+		qmerge -yq "$@"
+		;;
+	autoibin-upgrade|aiug)
+		qmerge -yq -uDN @world "$@"
+		echo -e "Don't forget to run '${ENABLE_COLOR}etc-update${DISABLE_COLOR}' and accept remote changes from Argent!"
 		;;
 	autoremove|ar)
 		if [ "$1" == "--update" ] ; then
@@ -379,6 +389,12 @@ case "$action" in
 	remove-orphans)
 		remove_orphans
 		;;
+	iremove-orphans)
+		iremove_orphans
+		;;
+	airemove-orphans)
+		airemove_orphans
+		;;
 	fetchsourcepkg)
 		fetchsourcepkg "$@"
 		;;
@@ -449,12 +465,10 @@ case "$action" in
 				upgrade-nocol - Upgrade system without collision protection
 				upgrade-specific - Upgrade specific package(s)
 				install-no-collision - Install a package forcefully without collision protection
-				install-bin-pkg|ibin - Install only a precompiled binary package if available
 				compile-preserved - Recompile packages that are categorized as preserved-rebuilds
 
 				autoinstall|ai - Install new packages (no confirmation)
 				autoinstall-no-collision - Install new package forcefully without collision protection ( no confirmation )
-				autoinstall-bin-pkg|aibin - Install only a precompiled binary package if available ( no confirmation )
 				autoremove|ar - Remove packages safely (no confirmation)
 				reinstall-depend - Reinstall all dependencies of given package(s) based on current version/revision
 				src-newuse - Check a specific package if it has to be reinstalled due to USE flag change ( portage-specific )
@@ -490,6 +504,21 @@ case "$action" in
 				autoclean - Remove packages that are no longer needed (no confirmation)
 				autobuildpkgonly - Build/Recompile package(s) and export them locally ( no confirmation )
 				autobuildinstall - Build/Recompile package(s) and autoinstall them immediately ( no confirmation )
+
+			Binary-only commands ( qmerge backend ) :
+				install-bin-pkg|ibin|ib - Install precompiled binary package(s)
+				autoinstall-bin-pkg|aibin|aib - Install precompiled binary package(s) ( no confirmation )
+				ibin-update|iup - Refresh the binhost package index, if package(s) as args: download them and their deps without installing
+				ibin-upgrade|iug - Upgrade the whole system ( @world, includes @system )
+				autoibin-upgrade|aiug - Upgrade the whole system ( no confirmation )
+				ibin-pretend|ip - Show what would be installed from binaries without writing on system
+				ibin-search|is - Search the binhost index catalog for package(s)
+				ibin-remove|ir - Remove binary package(s) safely, only if nothing else needs them
+				ibin-clean|ic - Remove packages that are no longer required by @world
+				iremove-orphans - Remove orphaned packages ( with confirmation )
+				airemove-orphans - Remove orphaned packages ( no confirmation )
+				ibin-info - Show how a package was built, from the installed database or a binhost entry
+				ibin-repos - List configured binhost repositories in priority order
 
 				remove-orphans - Remove orphaned packages ( with confirmation )
 				fetchbinpkg - Downloads only binaries from remote

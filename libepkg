@@ -997,6 +997,18 @@ remove_orphans() {
 	emerge --depclean -a
 }
 
+iremove_orphans() {
+	checkmakeconf
+
+	qmerge --depclean
+}
+
+airemove_orphans() {
+	checkmakeconf
+
+	qmerge --depclean -yq
+}
+
 buildinstall() {
 	# Stands for build (-Bv) and install (-va with --getbinpkg)
 	# Also regenerates the binhost Packages file
