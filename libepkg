@@ -3,9 +3,14 @@
 # License: GPLv2
 
 if [[ -d "/etc/portage/make.conf" ]]; then
-    [[ -e "/etc/portage/make.conf/main.conf" ]] \
-        && export MAKECONF_PATH="/etc/portage/make.conf/main.conf" \
-        || export MAKECONF_PATH="/etc/portage/make.conf/00-argent.conf"
+    export MAKECONF_PATH="/etc/portage/make.conf/00-main.conf"
+    for _makeconf in 00-main.conf main.conf 00-argent.conf ; do
+        if [[ -e "/etc/portage/make.conf/${_makeconf}" ]] ; then
+            export MAKECONF_PATH="/etc/portage/make.conf/${_makeconf}"
+            break
+        fi
+    done
+    unset _makeconf
 else
     export MAKECONF_PATH="/etc/portage/make.conf"
 fi
@@ -456,6 +461,19 @@ backupallpkg() {
 	env-update && source /etc/profile
 }
 
+checkpkgdirwritable() {
+	local probe="${PKGDIR}/.epkg-writable.$$"
+
+	if ( : > "${probe}" ) 2>/dev/null ; then
+		rm -f "${probe}"
+		return 0
+	fi
+
+	ewarn "${PKGDIR} is not writable, it is most likely a read-only mount"
+	ewarn "Skipping local package cleanup, nothing else is affected"
+	return 1
+}
+
 cleanoutdated() {
 	# function designed to clearout any outdated package using gentoolkit
 	# the unconventional way here: we import /etc/portage/make.conf into current local function
@@ -464,8 +482,10 @@ cleanoutdated() {
 	checkmakeconf
 
 	if [ -d "${PKGDIR}" ] ; then
-		/usr/bin/eclean-pkg
-		echo "Note: remote binary package cache at /var/cache/binhost/ is managed by portage and is not cleaned here."
+		if checkpkgdirwritable ; then
+			/usr/bin/eclean-pkg
+			echo "Note: remote binary package cache at /var/cache/binhost/ is managed by portage and is not cleaned here."
+		fi
 	else
 		eerror "No such directory ${PKGDIR}"
 		echo "Please consider: mkdir ${PKGDIR}/"
@@ -485,8 +505,10 @@ cleanlocalpkg() {
 	checkmakeconf
 
 	if [ -d "${PKGDIR}" ] ; then
-		rm -rf "${PKGDIR}"/* || exit 1
-		echo "Note: remote binary package cache at /var/cache/binhost/ is managed by portage and is not affected by this command."
+		if checkpkgdirwritable ; then
+			rm -rf "${PKGDIR}"/* || exit 1
+			echo "Note: remote binary package cache at /var/cache/binhost/ is managed by portage and is not affected by this command."
+		fi
 	else
 		eerror "No such directory ${PKGDIR}"
 		echo "Make sure you have this directory"
