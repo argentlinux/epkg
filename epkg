@@ -39,6 +39,12 @@ case "$action" in
 		qmerge "$@"
 		;;
 	ibin-update|iup)
+		if [ "$1" == "--clean" ] ; then
+			shift
+			epkgupdate --clean
+		else
+			epkgupdate
+		fi
 		qmerge -f "$@"
 		;;
 	ibin-upgrade|iug)
@@ -407,18 +413,9 @@ case "$action" in
     update|u)
         if [ "$1" == "--clean" ] ; then
             shift
-            if [[ "${EPKG_DISTRO_SET}" == "argent" ]]; then
-                fetchminimalsync
-                git_clean_history
-            else
-                emerge --sync
-            fi
+            epkgupdate --clean
         else
-            if [[ "${EPKG_DISTRO_SET}" == "argent" ]]; then
-                fetchminimalsync
-            else
-                emerge --sync
-            fi
+            epkgupdate
         fi
         ;;
 	devsync)

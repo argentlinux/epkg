@@ -344,6 +344,15 @@ fetchminimalsync() {
     refresh_pkg_keys
 }
 
+epkgupdate() {
+	if [[ "${EPKG_DISTRO_SET}" == "argent" ]]; then
+		fetchminimalsync
+		[[ "${1}" == "--clean" ]] && git_clean_history
+	else
+		emerge --sync
+	fi
+}
+
 git_clean_history() {
     # cleanup git history when called
     if [[ -d "${PORTAGE_DIR}"/.git ]] ; then
