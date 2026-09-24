@@ -353,6 +353,44 @@ epkgupdate() {
 	fi
 }
 
+fix_repos() {
+	local force="${1}"
+	local repo broken
+
+	for repo in "${PORTAGE_DIR}" "${ARGENT_OVERLAY}" ; do
+		if [[ -z "${repo}" || "${repo}" == "/" ]] ; then
+			eerror "Refusing to operate on an empty repository path"
+			eerror "Check PORTDIR in ${MAKECONF_PATH}"
+			continue
+		fi
+
+		if [[ ! -d "${repo}/.git" ]] ; then
+			ewarn "${repo} has no git metadata, it will be fetched from scratch"
+			mkdir -p "${repo}"
+			continue
+		fi
+
+		broken=0
+
+		if [[ "${force}" == "--force" ]] ; then
+			broken=1
+		else
+			einfo "Verifying ${repo}, this can take a while"
+			git -C "${repo}" fsck --no-dangling --no-progress > /dev/null 2>&1 || broken=1
+		fi
+
+		if [[ ${broken} -eq 1 ]] ; then
+			ewarn "${repo} is damaged, wiping it for a clean re-sync"
+			rm -rf "${repo}"
+			mkdir -p "${repo}"
+		else
+			einfo "${repo} is healthy, leaving it alone"
+		fi
+	done
+
+	fetchminimalsync
+}
+
 git_clean_history() {
     # cleanup git history when called
     if [[ -d "${PORTAGE_DIR}"/.git ]] ; then
