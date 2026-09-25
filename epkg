@@ -427,6 +427,7 @@ case "$action" in
 		forcesync
 		;;
 	fix)
+		fix_merging "$@"
 		fix_repos "$@"
 		;;
 	regen-keys)
@@ -527,8 +528,9 @@ case "$action" in
 				fetchsourcepkg - Downloads the source of the program. Usually in /usr/portage/distfiles/
 				search - Search for packages
 				update - Resync portage tree, portage config && argent-ws overlay
-				fix - Verify the portage tree and argent-ws overlay, re-fetch any that are
-				      corrupt. Accepts --force to re-fetch both without checking first
+				fix - Report any interrupted merge left in /var/db/pkg and offer to remove
+				      it, then verify the portage tree and argent-ws overlay and re-fetch
+				      any that are corrupt. Accepts --force to skip both questions
 				regen-keys - Rebuild the local binpkg signature keyring (/etc/portage/gnupg) via getuto
 				sysinfo - Display information about installed core packages and portage configuration
 				resume - Resume the last failed emerge operation(s)

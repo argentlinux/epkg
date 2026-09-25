@@ -353,6 +353,52 @@ epkgupdate() {
 	fi
 }
 
+fix_merging() {
+	local force="${1}"
+	local vdb="/var/db/pkg"
+	local leftovers=()
+	local d answer
+
+	[[ -d "${vdb}" ]] || return 0
+
+	while IFS= read -r d ; do
+		[[ -n "${d}" ]] && leftovers+=( "${d}" )
+	done < <(find "${vdb}" -mindepth 2 -maxdepth 2 -type d -name '-MERGING-*' 2>/dev/null | sort)
+
+	if [[ ${#leftovers[@]} -eq 0 ]] ; then
+		einfo "No interrupted merges left behind in ${vdb}"
+		return 0
+	fi
+
+	if pgrep -x emerge > /dev/null 2>&1 ; then
+		ewarn "emerge is running, a merge in progress and locks these directories"
+		ewarn "Refusing to do anything to ${vdb}, run this again once no merge is active"
+		return 1
+	fi
+
+	ewarn "Found ${#leftovers[@]} interrupted merge(s) in ${vdb}"
+	for d in "${leftovers[@]}" ; do
+		printf '  %s  %s\n' "$(date -r "${d}" '+%Y-%m-%d %H:%M' 2>/dev/null)" "${d#"${vdb}"/}"
+	done
+	einfo "These are left by a merge that was killed or that crashed"
+	einfo "Portage already ignores them, removing them will frees space"
+
+	if [[ "${force}" != "--force" ]] ; then
+		answer=""
+		read -rp "Remove these ${#leftovers[@]} leftover(s)? [y/N] " answer || true
+		case "${answer}" in
+			y|Y|yes|YES) ;;
+			*) einfo "Nothing was removed" ; return 0 ;;
+		esac
+	fi
+
+	for d in "${leftovers[@]}" ; do
+		rm -rf -- "${d}" || ewarn "Could not remove ${d}"
+	done
+
+	einfo "Removed ${#leftovers[@]} interrupted merge(s)"
+}
+
 fix_repos() {
 	local force="${1}"
 	local repo broken
