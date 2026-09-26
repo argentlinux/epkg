@@ -121,11 +121,11 @@ case "$action" in
 		if [ "$1" == "--check" ] ; then
 			checksync
 			shift
-			emerge -uDaN @system @world "$@"
+			emerge -uDaN @system @world "$@" && postupgradeclean
 			echo -e "Don't forget to do '${ENABLE_COLOR}epkg clean${DISABLE_COLOR}' every time you do a upgrade!"
 			echo -e "Don't forget to run '${ENABLE_COLOR}etc-update${DISABLE_COLOR}' and accept remote changes from Argent!"
 		else
-			emerge -uDaN @system @world "$@"
+			emerge -uDaN @system @world "$@" && postupgradeclean
 			echo -e "Don't forget to do '${ENABLE_COLOR}epkg clean${DISABLE_COLOR}' every time you do a upgrade!"
 			echo -e "Don't forget to run '${ENABLE_COLOR}etc-update${DISABLE_COLOR}' and accept remote changes from Argent!"
 		fi
@@ -134,11 +134,11 @@ case "$action" in
 		if [ "$1" == "--check" ] ; then
 			checksync
 			shift
-			emerge -uDvaN --with-bdeps=y @system @world "$@" --backtrack=150
+			emerge -uDvaN --with-bdeps=y @system @world "$@" --backtrack=150 && postupgradeclean
 			echo -e "Don't forget to do '${ENABLE_COLOR}epkg clean${DISABLE_COLOR}' every time you do a upgrade!"
 			echo -e "Don't forget to run '${ENABLE_COLOR}etc-update${DISABLE_COLOR}' and accept remote changes from Argent!"
 		else
-			emerge -uDvaN --with-bdeps=y @system @world "$@" --backtrack=150
+			emerge -uDvaN --with-bdeps=y @system @world "$@" --backtrack=150 && postupgradeclean
 			echo -e "Don't forget to do '${ENABLE_COLOR}epkg clean${DISABLE_COLOR}' every time you do a upgrade!"
 			echo -e "Don't forget to run '${ENABLE_COLOR}etc-update${DISABLE_COLOR}' and accept remote changes from Argent!"
 		fi
@@ -465,6 +465,8 @@ case "$action" in
 
 				upgrade|ug -  Upgrade system. No build dependencies are upgraded
 				upgrade-full|ugf - Upgrade system. All build dependencies included for upgrade
+				                   upgrade and upgrade-full run eclean-pkg afterwards,
+				                   set EPKG_BACKUP_PKG="1" to keep local binary packages
 				upgrade-nocol - Upgrade system without collision protection
 				upgrade-specific - Upgrade specific package(s)
 				install-no-collision - Install a package forcefully without collision protection

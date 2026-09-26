@@ -2,6 +2,8 @@
 # Copyright Argent Linux Authors 2015-2026
 # License: GPLv2
 
+_EPKG_BACKUP_PKG_ENV="${EPKG_BACKUP_PKG-}"
+
 if [[ -d "/etc/portage/make.conf" ]]; then
     export MAKECONF_PATH="/etc/portage/make.conf/00-main.conf"
     for _makeconf in 00-main.conf main.conf 00-argent.conf ; do
@@ -588,6 +590,32 @@ cleanoutdated() {
 
 	# regenerating environment here is a must!
 	env-update && source /etc/profile
+}
+
+postupgradeclean() {
+	local backup="${_EPKG_BACKUP_PKG_ENV}"
+
+	if [[ -z "${backup}" && -e "/etc/portage/make.conf.local" ]] ; then
+		backup="$(unset EPKG_BACKUP_PKG ; source /etc/portage/make.conf.local > /dev/null 2>&1 ; echo "${EPKG_BACKUP_PKG-}")"
+	fi
+
+	if [[ -z "${backup}" ]] ; then
+		backup="$(env -u EPKG_BACKUP_PKG portageq envvar EPKG_BACKUP_PKG 2>/dev/null)"
+	fi
+
+	if [[ "${backup:-0}" == "1" ]] ; then
+		einfo "EPKG_BACKUP_PKG=1, keeping local binary packages untouched"
+		return 0
+	fi
+
+	checkmakeconf
+
+	[[ -d "${PKGDIR}" ]] || return 0
+	checkpkgdirwritable || return 0
+
+	einfo "Removing outdated local binary packages from ${PKGDIR}"
+	einfo "Set EPKG_BACKUP_PKG=\"1\" to keep them"
+	/usr/bin/eclean-pkg
 }
 
 cleanlocalpkg() {
