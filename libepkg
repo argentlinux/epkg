@@ -557,14 +557,15 @@ backupallpkg() {
 }
 
 checkpkgdirwritable() {
-	local probe="${PKGDIR}/.epkg-writable.$$"
+	local dir="${1:-${PKGDIR}}"
+	local probe="${dir}/.epkg-writable.$$"
 
 	if ( : > "${probe}" ) 2>/dev/null ; then
 		rm -f "${probe}"
 		return 0
 	fi
 
-	ewarn "${PKGDIR} is not writable, it is most likely a read-only mount"
+	ewarn "${dir} is not writable, it is most likely a read-only mount"
 	ewarn "Skipping local package cleanup, nothing else is affected"
 	return 1
 }
@@ -640,6 +641,49 @@ cleanlocalpkg() {
 
 	# regenerating environment here is a must!
 	env-update && source /etc/profile
+}
+
+wipe_binpkgs() {
+	local ask_mode="${1}"
+	local targets=()
+	local d answer
+
+	for d in /var/cache/binpkgs /var/cache/binhost ; do
+		[[ -d "${d}" && -n "$(ls -A "${d}" 2>/dev/null)" ]] && targets+=( "${d}" )
+	done
+
+	if [[ ${#targets[@]} -eq 0 ]] ; then
+		einfo "No binary packages to wipe"
+		return 0
+	fi
+
+	if pgrep -x emerge > /dev/null 2>&1 || pgrep -x qmerge > /dev/null 2>&1 ; then
+		ewarn "emerge or qmerge is running and may be using these packages"
+		ewarn "Refusing to wipe anything, run this again once no merge is active"
+		return 1
+	fi
+
+	ewarn "Everything in these directories will be removed:"
+	for d in "${targets[@]}" ; do
+		printf '  %6s  %s\n' "$(du -sh "${d}" 2>/dev/null | cut -f1)" "${d}"
+	done
+
+	if [[ "${ask_mode}" != "noask" ]] ; then
+		answer=""
+		read -rp "Wipe all local and cached binary packages? [y/N] " answer || true
+		case "${answer}" in
+			y|Y|yes|YES) ;;
+			*) einfo "Nothing was removed" ; return 0 ;;
+		esac
+	fi
+
+	for d in "${targets[@]}" ; do
+		checkpkgdirwritable "${d}" || continue
+		find "${d}" -mindepth 1 -delete || ewarn "Could not remove everything from ${d}"
+	done
+
+	einfo "Refreshing the binary package indexes"
+	emaint binhost -f
 }
 
 src_newuse() {

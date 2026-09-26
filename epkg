@@ -117,6 +117,12 @@ case "$action" in
 	cleanlocalpkg)
 		cleanlocalpkg
 		;;
+	wipe)
+		wipe_binpkgs ask
+		;;
+	awipe)
+		wipe_binpkgs noask
+		;;
 	upgrade|ug)
 		if [ "$1" == "--check" ] ; then
 			checksync
@@ -462,6 +468,7 @@ case "$action" in
 				clean|c - Remove packages that are no longer needed
 				cleanoutdated - Remove local saved and outdated packages
 				cleanlocalpkg - Remove all locally saved package ( including index ) usually in /usr/portage/packages
+				wipe - Remove every binary package from /var/cache/binpkgs and /var/cache/binhost
 
 				upgrade|ug -  Upgrade system. No build dependencies are upgraded
 				upgrade-full|ugf - Upgrade system. All build dependencies included for upgrade
@@ -507,6 +514,7 @@ case "$action" in
 				automodule-rebuild - Rebuild all kernel modules that are currently installed ( no confirmation )
 
 				autoclean - Remove packages that are no longer needed (no confirmation)
+				awipe - Remove every binary package from /var/cache/binpkgs and /var/cache/binhost ( no confirmation )
 				autobuildpkgonly - Build/Recompile package(s) and export them locally ( no confirmation )
 				autobuildinstall - Build/Recompile package(s) and autoinstall them immediately ( no confirmation )
 
