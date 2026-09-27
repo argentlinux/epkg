@@ -109,6 +109,7 @@ case "$action" in
 		else
 			emerge --depclean -av
 		fi
+		cleanbinpkgs ask
 		echo -e "Don't forget to run '${ENABLE_COLOR}etc-update${DISABLE_COLOR}' and accept remote changes from Argent!"
 		;;
 	cleanoutdated)
@@ -127,11 +128,11 @@ case "$action" in
 		if [ "$1" == "--check" ] ; then
 			checksync
 			shift
-			emerge -uDaN @system @world "$@" && postupgradeclean
+			emerge -uDaN @system @world "$@" && refreshbinindex
 			echo -e "Don't forget to do '${ENABLE_COLOR}epkg clean${DISABLE_COLOR}' every time you do a upgrade!"
 			echo -e "Don't forget to run '${ENABLE_COLOR}etc-update${DISABLE_COLOR}' and accept remote changes from Argent!"
 		else
-			emerge -uDaN @system @world "$@" && postupgradeclean
+			emerge -uDaN @system @world "$@" && refreshbinindex
 			echo -e "Don't forget to do '${ENABLE_COLOR}epkg clean${DISABLE_COLOR}' every time you do a upgrade!"
 			echo -e "Don't forget to run '${ENABLE_COLOR}etc-update${DISABLE_COLOR}' and accept remote changes from Argent!"
 		fi
@@ -140,11 +141,11 @@ case "$action" in
 		if [ "$1" == "--check" ] ; then
 			checksync
 			shift
-			emerge -uDvaN --with-bdeps=y @system @world "$@" --backtrack=150 && postupgradeclean
+			emerge -uDvaN --with-bdeps=y @system @world "$@" --backtrack=150 && refreshbinindex
 			echo -e "Don't forget to do '${ENABLE_COLOR}epkg clean${DISABLE_COLOR}' every time you do a upgrade!"
 			echo -e "Don't forget to run '${ENABLE_COLOR}etc-update${DISABLE_COLOR}' and accept remote changes from Argent!"
 		else
-			emerge -uDvaN --with-bdeps=y @system @world "$@" --backtrack=150 && postupgradeclean
+			emerge -uDvaN --with-bdeps=y @system @world "$@" --backtrack=150 && refreshbinindex
 			echo -e "Don't forget to do '${ENABLE_COLOR}epkg clean${DISABLE_COLOR}' every time you do a upgrade!"
 			echo -e "Don't forget to run '${ENABLE_COLOR}etc-update${DISABLE_COLOR}' and accept remote changes from Argent!"
 		fi
@@ -343,6 +344,7 @@ case "$action" in
 		else
 			emerge --depclean -q
 		fi
+		cleanbinpkgs noask
 		echo -e "Don't forget to run '${ENABLE_COLOR}etc-update${DISABLE_COLOR}' and accept remote changes from Argent!"
 		;;
 	autobuildpkgonly)

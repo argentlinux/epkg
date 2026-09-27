@@ -593,8 +593,15 @@ cleanoutdated() {
 	env-update && source /etc/profile
 }
 
-postupgradeclean() {
+refreshbinindex() {
+	einfo "Updating the package index, this can take a while. Please wait..."
+	emaint binhost -f
+}
+
+cleanbinpkgs() {
+	local ask_mode="${1}"
 	local backup="${_EPKG_BACKUP_PKG_ENV}"
+	local answer
 
 	if [[ -z "${backup}" && -e "/etc/portage/make.conf.local" ]] ; then
 		backup="$(unset EPKG_BACKUP_PKG ; source /etc/portage/make.conf.local > /dev/null 2>&1 ; echo "${EPKG_BACKUP_PKG-}")"
@@ -616,7 +623,19 @@ postupgradeclean() {
 
 	einfo "Removing outdated local binary packages from ${PKGDIR}"
 	einfo "Set EPKG_BACKUP_PKG=\"1\" to keep them"
+
+	if [[ "${ask_mode}" != "noask" ]] ; then
+		/usr/bin/eclean-pkg -p
+		answer=""
+		read -rp "Remove these outdated binary packages? [y/N] " answer || true
+		case "${answer}" in
+			y|Y|yes|YES) ;;
+			*) einfo "No binary packages were removed" ; return 0 ;;
+		esac
+	fi
+
 	/usr/bin/eclean-pkg
+	refreshbinindex
 }
 
 cleanlocalpkg() {
@@ -682,8 +701,9 @@ wipe_binpkgs() {
 		find "${d}" -mindepth 1 -delete || ewarn "Could not remove everything from ${d}"
 	done
 
-	einfo "Refreshing the binary package indexes"
+	einfo "Rebuilding the local binary package index"
 	emaint binhost -f
+	einfo "The binhost indexes are downloaded again by the next install or upgrade"
 }
 
 src_newuse() {
