@@ -579,8 +579,8 @@ cleanoutdated() {
 
 	if [ -d "${PKGDIR}" ] ; then
 		if checkpkgdirwritable ; then
+			[[ -e "${PKGDIR}/Packages" ]] || emaint binhost -f
 			/usr/bin/eclean-pkg
-			echo "Note: remote binary package cache at /var/cache/binhost/ is managed by portage and is not cleaned here."
 		fi
 	else
 		eerror "No such directory ${PKGDIR}"
@@ -623,6 +623,8 @@ cleanbinpkgs() {
 
 	einfo "Removing outdated local binary packages from ${PKGDIR}"
 	einfo "Set EPKG_BACKUP_PKG=\"1\" to keep them"
+
+	[[ -e "${PKGDIR}/Packages" ]] || emaint binhost -f
 
 	if [[ "${ask_mode}" != "noask" ]] ; then
 		/usr/bin/eclean-pkg -p
