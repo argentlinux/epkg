@@ -18,13 +18,19 @@ fi
 
 case "$action" in
     install|i)
-        if [ "$1" == "--check" ] ; then
-            checksync
+        check=0
+        while [[ "$1" == "--check" || "$1" == "--unverify" ]] ; do
+            if [ "$1" == "--unverify" ] ; then
+                ewarn "Installing WITHOUT binary package signature verification"
+                ewarn "Use this only to recover from a broken signed binhost"
+                export FEATURES="${FEATURES:+${FEATURES} }-binpkg-request-signature binpkg-ignore-signature"
+            else
+                check=1
+            fi
             shift
-            emerge -aq "${@}"
-        else
-            emerge -aq "${@}"
-        fi
+        done
+        [[ ${check} -eq 1 ]] && checksync
+        emerge -aq "${@}"
         ;;
 	install-no-collision)
 		if [ "$1" == "--check" ] ; then
@@ -427,9 +433,10 @@ case "$action" in
         else
             epkgupdate
         fi
+        emerge -pq --nodeps sys-apps/portage > /dev/null 2>&1 || true
         ;;
 	devsync)
-		argentsync
+		argentsync "$@"
 		;;
 	force-sync)
 		forcesync
@@ -463,6 +470,7 @@ case "$action" in
 
 			Commands :
 				install|i - Install new packages
+				install|i --unverify - Install new packages without binary package signature verification (rescue only)
 				remove|r - Remove packages safely
 				configure|cfg - Configure packages as per ebuilds settings
 				backuppkg - Backup specific packages with own configurations for later use
@@ -487,6 +495,7 @@ case "$action" in
 				reinstall-depend - Reinstall all dependencies of given package(s) based on current version/revision
 				src-newuse - Check a specific package if it has to be reinstalled due to USE flag change ( portage-specific )
 				devsync - Upgrade all Portage overlay structure with needed ebuilds for development / compilation
+				devsync --unsigned - Same as devsync, without commit signature checks on gentoo and argent-ws (rescue only)
 				module-rebuild - Rebuild all kernel modules that are currently installed
 
 				backupallpkg - Backup the whole system. Usually in /usr/portage/packages
