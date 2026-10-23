@@ -298,29 +298,202 @@ regen_pkg_keys() {
 	fi
 }
 
+repo_branch() {
+	local repo="${1}" upstream current
+
+	upstream="$(git -C "${repo}" rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null)"
+	if [[ -n "${upstream}" ]] ; then
+		echo "${upstream#*/}"
+		return
+	fi
+
+	current="$(git -C "${repo}" symbolic-ref --quiet --short HEAD 2>/dev/null)"
+	echo "${current:-master}"
+}
+
+local_changes() {
+	git -C "${1}" status --porcelain --untracked-files=no --ignore-submodules=all 2>/dev/null | grep -v '^ D '
+}
+
+branch_repos() {
+	echo "${PORTAGE_DIR:-/var/db/repos/gentoo}"
+	echo "${ARGENT_OVERLAY}"
+	echo "/opt/argentws-build"
+}
+
+show_branches() {
+	local repo branch upstream state
+
+	while IFS= read -r repo ; do
+		if [[ ! -d "${repo}/.git" ]] ; then
+			ewarn "${repo}: not a git repository"
+			continue
+		fi
+
+		branch="$(git -C "${repo}" symbolic-ref --quiet --short HEAD 2>/dev/null || echo "detached")"
+		upstream="$(git -C "${repo}" rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null || echo "none")"
+
+		if [[ -n "$(local_changes "${repo}")" ]] ; then
+			state="local changes"
+		else
+			state="clean"
+		fi
+
+		einfo "${repo}: ${branch} (tracking ${upstream}, ${state})"
+	done < <(branch_repos)
+}
+
+checkout_branch() {
+	local repo="${1}" branch="${2}" force="${3}"
+	local -a fetch_opts=() checkout_opts=()
+
+	[[ "$(git -C "${repo}" rev-parse --is-shallow-repository 2>/dev/null)" == "true" ]] && fetch_opts+=( --depth=1 )
+	[[ "${force}" == "--force" || -n "$(git -C "${repo}" status --porcelain --untracked-files=no --ignore-submodules=all | grep '^ D ')" ]] && checkout_opts+=( -f )
+
+	git -C "${repo}" remote set-branches origin "${branch}" || return 1
+	git -C "${repo}" fetch "${fetch_opts[@]}" origin "+refs/heads/${branch}:refs/remotes/origin/${branch}" || return 1
+	git -C "${repo}" checkout "${checkout_opts[@]}" -B "${branch}" --track "origin/${branch}" || return 1
+
+	if [[ -e "${repo}/.gitmodules" ]] ; then
+		git -C "${repo}" submodule update --recursive --depth=1 || return 1
+	fi
+}
+
+restore_branch() {
+	local repo="${1}" ref="${2}" upstream="${3}"
+
+	ewarn "Restoring ${repo} to ${ref}"
+	git -C "${repo}" remote set-branches origin "${upstream}"
+	git -C "${repo}" checkout -f "${ref}" > /dev/null 2>&1 || eerror "Could not restore ${repo}, fix it by hand or run: epkg fix --force"
+}
+
+switch_branch() {
+	local target="${1}" force="" arg repo failed=0 dirty=0 i
+	local -a selected=() repos=() touched=() from_ref=() from_upstream=()
+	local usage="Usage: epkg branch master|dev [gentoo] [argent-ws] [argentws-build] [--force]"
+
+	if [[ -z "${target}" || "${target}" == -* ]] ; then
+		eerror "${usage}"
+		return 1
+	fi
+	shift
+
+	for arg in "$@" ; do
+		case "${arg}" in
+			--force) force="--force" ;;
+			gentoo) selected+=( "${PORTAGE_DIR:-/var/db/repos/gentoo}" ) ;;
+			argent-ws) selected+=( "${ARGENT_OVERLAY}" ) ;;
+			argentws-build) selected+=( "/opt/argentws-build" ) ;;
+			*)
+				eerror "Unknown repository or option: ${arg}"
+				eerror "${usage}"
+				return 1
+				;;
+		esac
+	done
+
+	if [[ ${#selected[@]} -gt 0 ]] ; then
+		for repo in "${selected[@]}" ; do
+			if [[ ! -d "${repo}/.git" ]] ; then
+				eerror "${repo} is not a git repository"
+				return 1
+			fi
+			repos+=( "${repo}" )
+		done
+	else
+		while IFS= read -r repo ; do
+			if [[ ! -d "${repo}/.git" ]] ; then
+				ewarn "${repo} is not a git repository, skipping it"
+				continue
+			fi
+			repos+=( "${repo}" )
+		done < <(branch_repos)
+	fi
+
+	if [[ ${#repos[@]} -eq 0 ]] ; then
+		eerror "No git repositories found, use avasile to set up a mode first"
+		return 1
+	fi
+
+	einfo "Checking repositories before switching to ${target}"
+	for repo in "${repos[@]}" ; do
+		if [[ -e "${repo}/.git/MERGE_HEAD" || -d "${repo}/.git/rebase-merge" || -d "${repo}/.git/rebase-apply" ]] ; then
+			eerror "${repo} has a merge or rebase in progress"
+			failed=1
+			continue
+		fi
+
+		if ! git -C "${repo}" ls-remote --exit-code --heads origin "${target}" > /dev/null 2>&1 ; then
+			eerror "${repo}: branch ${target} not found on origin (or origin is unreachable)"
+			failed=1
+			continue
+		fi
+
+		if [[ "${force}" != "--force" && -n "$(local_changes "${repo}")" ]] ; then
+			eerror "${repo} has local changes:"
+			local_changes "${repo}"
+			dirty=1
+			failed=1
+		fi
+	done
+
+	if [[ ${failed} -eq 1 ]] ; then
+		eerror "Nothing was changed"
+		[[ ${dirty} -eq 1 ]] && eerror "Commit or drop the local changes, or use --force to discard them"
+		return 1
+	fi
+
+	for repo in "${repos[@]}" ; do
+		if [[ "$(git -C "${repo}" symbolic-ref --quiet --short HEAD 2>/dev/null)" == "${target}" && "$(repo_branch "${repo}")" == "${target}" ]] ; then
+			einfo "${repo} is already on ${target}"
+			continue
+		fi
+
+		touched+=( "${repo}" )
+		from_ref+=( "$(git -C "${repo}" symbolic-ref --quiet --short HEAD 2>/dev/null || git -C "${repo}" rev-parse HEAD)" )
+		from_upstream+=( "$(repo_branch "${repo}")" )
+
+		einfo "Switching ${repo} from ${from_upstream[-1]} to ${target}"
+		if ! checkout_branch "${repo}" "${target}" "${force}" ; then
+			eerror "Switching ${repo} failed, putting every repository back"
+			for (( i=${#touched[@]}-1 ; i>=0 ; i-- )) ; do
+				restore_branch "${touched[i]}" "${from_ref[i]}" "${from_upstream[i]}"
+			done
+			return 1
+		fi
+	done
+
+	einfo "All repositories now follow ${target}"
+	einfo "Going back to an older branch can make emerge downgrade packages (that is expected)."
+}
+
 fetchminimalsync() {
         # fetch minimal portage tree
         # in usermode we don't want the whole tree of gentoo ebuilds
         # but we need portage profiles portage metadata && portage eclasses
         # so make a sparse-checkout, to fetch only what we need
+        local branch
+
         if [[ ! -d "${PORTAGE_DIR}"/.git ]] ; then
                 einfo "Injecting usermode (minimal) gentoo portage tree"
+                branch="${EPKG_GENTOO_BRANCH:-master}"
                 cd "${PORTAGE_DIR}" && git init > /dev/null 2>&1
-                git remote add origin https://gitlab.com/argent/portage.git
+                git remote add -t "${branch}" origin https://gitlab.com/argent/portage.git
                 git config core.sparsecheckout true
                 git config core.sparseCheckoutCone false
                 echo "profiles/*" > .git/info/sparse-checkout
                 echo "metadata/*" >> .git/info/sparse-checkout
                 echo "eclass/*" >> .git/info/sparse-checkout
                 echo ".gitignore" >> .git/info/sparse-checkout
-                git pull --depth=1 origin master
-                git branch -u origin/master master
+                git fetch --depth=1 origin "${branch}"
+                git checkout -B "${branch}" --track "origin/${branch}"
                 rm -rf "${PORTAGE_DIR}/profiles/updates"
         else
         # We need minimal git pull if the folder really exists
         pushd "${PORTAGE_DIR}" > /dev/null 2>&1 || return
-            git fetch --depth=1 origin master
-            git reset --hard origin/master
+            branch="$(repo_branch .)"
+            git fetch --depth=1 origin "+refs/heads/${branch}:refs/remotes/origin/${branch}"
+            git reset --hard "origin/${branch}"
             git clean -fd
             git gc --prune=now
         popd || return
@@ -328,22 +501,24 @@ fetchminimalsync() {
 
     if [[ ! -d "${ARGENT_OVERLAY}/.git" ]] ; then
         einfo "Injecting usermode argent-ws overlay"
+        branch="${EPKG_OVERLAY_BRANCH:-master}"
         cd "${ARGENT_OVERLAY}" && git init > /dev/null 2>&1
-        git remote add origin https://gitlab.com/argent/argent-ws.git
+        git remote add -t "${branch}" origin https://gitlab.com/argent/argent-ws.git
         git config core.sparsecheckout true
         git config core.sparseCheckoutCone false
                 echo "profiles/*" > .git/info/sparse-checkout
                 echo "metadata/*" >> .git/info/sparse-checkout
                 echo "eclass/*" >> .git/info/sparse-checkout
                 echo ".gitignore" >> .git/info/sparse-checkout
-                git pull --depth=1 origin master
-                git branch -u origin/master master
+                git fetch --depth=1 origin "${branch}"
+                git checkout -B "${branch}" --track "origin/${branch}"
                 git submodule update --init --recursive --depth=1
                 rm -rf ""${PORTAGE_DIR}"/profiles/updates"
     else
         pushd "${ARGENT_OVERLAY}" > /dev/null 2>&1 || return
-            git fetch --depth=1 origin master
-            git reset --hard origin/master
+            branch="$(repo_branch .)"
+            git fetch --depth=1 origin "+refs/heads/${branch}:refs/remotes/origin/${branch}"
+            git reset --hard "origin/${branch}"
             git clean -fd
             git submodule update --init --recursive --depth=1
             git submodule foreach --recursive git clean -fd
@@ -352,8 +527,9 @@ fetchminimalsync() {
     fi
 
     pushd /opt/argentws-build/ > /dev/null 2>&1 || return
-        git fetch --depth=1 origin master
-        git reset --hard origin/master
+        branch="$(repo_branch .)"
+        git fetch --depth=1 origin "+refs/heads/${branch}:refs/remotes/origin/${branch}"
+        git reset --hard "origin/${branch}"
         git clean -fd
         git gc --prune=now
     popd || return
@@ -443,6 +619,11 @@ fix_repos() {
 		fi
 
 		if [[ ${broken} -eq 1 ]] ; then
+			if [[ "${repo}" == "${ARGENT_OVERLAY}" ]] ; then
+				export EPKG_OVERLAY_BRANCH="$(repo_branch "${repo}")"
+			else
+				export EPKG_GENTOO_BRANCH="$(repo_branch "${repo}")"
+			fi
 			ewarn "${repo} is damaged, wiping it for a clean re-sync"
 			rm -rf "${repo}"
 			mkdir -p "${repo}"

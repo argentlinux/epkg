@@ -9,7 +9,7 @@ case "$1" in
 	*) checkroot ;;
 esac
 
-checksystemmode
+[[ "$1" == "branch" ]] || checksystemmode
 
 action=$1
 if [ $# -gt 0 ]; then
@@ -441,6 +441,13 @@ case "$action" in
 	force-sync)
 		forcesync
 		;;
+	branch)
+		if [[ -z "$1" ]] ; then
+			show_branches
+		else
+			switch_branch "$@"
+		fi
+		;;
 	fix)
 		fix_merging "$@"
 		fix_repos "$@"
@@ -549,6 +556,11 @@ case "$action" in
 				fetchsourcepkg - Downloads the source of the program. Usually in /usr/portage/distfiles/
 				search - Search for packages
 				update - Resync portage tree, portage config && argent-ws overlay
+				branch - Show which branch the portage tree, argent-ws overlay and portage config follow
+				branch master|dev - Switch all three to that branch, every sync follows it.
+				                    Refuses when there are local changes, --force discards them
+				branch master|dev gentoo|argent-ws|argentws-build - Switch only the named repositories,
+				                    one or more names, e.g. epkg branch dev argent-ws
 				fix - Report any interrupted merge left in /var/db/pkg and offer to remove
 				      it, then verify the portage tree and argent-ws overlay and re-fetch
 				      any that are corrupt. Accepts --force to skip both questions
