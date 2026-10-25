@@ -36,6 +36,9 @@ export DISABLE_COLOR="\e[0m"
 
 export PORTAGE_DIR="${PORTDIR}"
 export ARGENT_OVERLAY="/var/db/repos/argent-ws"
+export ARGENT_KEYS_DIR="/opt/argent-keys"
+export ARGENT_KEYS_URL="https://gitlab.com/argent/argent-keys.git"
+export ARGENT_KEY_FPR="B0CC3F7C7C097B35383B753D2F78FA0548873567"
 
 # import gentoo functions, this has not been ported to lib64 yet
 source /lib/gentoo/functions.sh
@@ -282,6 +285,10 @@ forcesync() {
 }
 
 refresh_pkg_keys() {
+	if is_verified ; then
+		qetuto || ewarn "qetuto could not refresh the binpkg signature keyring"
+		return
+	fi
 	if command -v getuto > /dev/null 2>&1 ; then
 		getuto || ewarn "getuto could not refresh the binpkg signature keyring"
 	fi
@@ -290,12 +297,106 @@ refresh_pkg_keys() {
 regen_pkg_keys() {
 	einfo "Regenerating /etc/portage/gnupg (binpkg signature keyring)"
 	rm -rf /etc/portage/gnupg
-	if command -v getuto > /dev/null 2>&1 ; then
+	if is_verified ; then
+		qetuto -v
+		if ! argent_key_trusted ; then
+			eerror "The Argent key is still not trusted in /etc/portage/gnupg"
+			return 1
+		fi
+	elif command -v getuto > /dev/null 2>&1 ; then
 		getuto -v
 	else
 		eerror "app-portage/getuto not found; cannot regenerate keyring"
 		return 1
 	fi
+}
+
+is_verified() {
+	[[ -e "${ARGENT_KEYS_DIR}" ]]
+}
+
+verify_links() {
+	echo "/etc/portage/repos.conf/zz-argent-verify.conf ../verify/repos.conf"
+	echo "/etc/portage/binrepos.conf/zz-argent-verify.conf ../verify/binrepos.conf"
+	echo "/etc/portage/make.conf/01-trust-helper.make.conf ../verify/make.conf"
+}
+
+verify_head() {
+	local repo="${1}" ref="${2}" pin="${3}" home keyfile status sig fpr found=0
+	shift 3
+
+	home="$(mktemp -d)" || return 1
+	for keyfile in "$@" ; do
+		[[ -r "${keyfile}" ]] || continue
+		gpg --homedir "${home}" --batch --quiet --import "${keyfile}" > /dev/null 2>&1 && found=1
+	done
+	[[ ${found} -eq 1 ]] && status="$(GNUPGHOME="${home}" git -C "${repo}" log -1 --format='%G? %GP' "${ref}" 2>/dev/null)"
+	gpgconf --homedir "${home}" --kill all > /dev/null 2>&1
+	rm -rf "${home}"
+
+	if [[ ${found} -eq 0 ]] ; then
+		eerror "${repo}: no signing key available to check ${ref} (${*})"
+		return 1
+	fi
+
+	read -r sig fpr <<< "${status}"
+	if [[ "${sig}" != [GU] ]] ; then
+		eerror "${repo}: ${ref} has no valid signature from a trusted key (status ${sig:-none})"
+		return 1
+	fi
+	if [[ -n "${pin}" && "${fpr}" != "${pin}" ]] ; then
+		eerror "${repo}: ${ref} is signed by ${fpr:-an unknown key}, not by the Argent key ${pin}"
+		return 1
+	fi
+}
+
+verify_repo_head() {
+	local repo="${1}" ref="${2}"
+
+	case "${repo}" in
+		"${ARGENT_OVERLAY}"|/opt/argentws-build)
+			verify_head "${repo}" "${ref}" "${ARGENT_KEY_FPR}" "${ARGENT_KEYS_DIR}/argent.asc"
+			;;
+		*)
+			verify_head "${repo}" "${ref}" "" "${ARGENT_KEYS_DIR}/gentoo-developers.asc"
+			;;
+	esac
+}
+
+synckeys() {
+	local dir="${ARGENT_KEYS_DIR}" fetched
+
+	einfo "Syncing ${dir} (Argent and Gentoo signing keys)"
+	if [[ ! -d "${dir}/.git" ]] ; then
+		mkdir -p "${dir}" || return 1
+		git -C "${dir}" init -q || return 1
+		git -C "${dir}" remote add origin "${ARGENT_KEYS_URL}" || return 1
+	fi
+
+	if ! git -C "${dir}" fetch -q --depth=1 origin "+refs/heads/master:refs/remotes/origin/master" ; then
+		eerror "Could not fetch ${ARGENT_KEYS_URL}, ${dir} was left untouched"
+		return 1
+	fi
+
+	fetched="$(mktemp)" || return 1
+	git -C "${dir}" show origin/master:argent.asc > "${fetched}" 2>/dev/null
+	if ! verify_head "${dir}" origin/master "${ARGENT_KEY_FPR}" /usr/share/openpgp-keys/argent.asc "${dir}/argent.asc" "${fetched}" ; then
+		rm -f "${fetched}"
+		eerror "${dir} was left untouched"
+		return 1
+	fi
+	rm -f "${fetched}"
+
+	git -C "${dir}" checkout -q -f -B master origin/master || return 1
+	git -C "${dir}" clean -qfd
+	git -C "${dir}" gc -q --prune=now
+}
+
+argent_key_trusted() {
+	local validity
+
+	validity="$(gpg --homedir /etc/portage/gnupg --batch --with-colons --list-keys "${ARGENT_KEY_FPR}" 2>/dev/null | awk -F: '$1 == "pub" { print $2 ; exit }')"
+	[[ "${validity}" == [fu] ]]
 }
 
 repo_branch() {
@@ -352,6 +453,9 @@ checkout_branch() {
 
 	git -C "${repo}" remote set-branches origin "${branch}" || return 1
 	git -C "${repo}" fetch "${fetch_opts[@]}" origin "+refs/heads/${branch}:refs/remotes/origin/${branch}" || return 1
+	if is_verified ; then
+		verify_repo_head "${repo}" "origin/${branch}" || return 1
+	fi
 	git -C "${repo}" checkout "${checkout_opts[@]}" -B "${branch}" --track "origin/${branch}" || return 1
 
 	if [[ -e "${repo}/.gitmodules" ]] ; then
@@ -474,6 +578,12 @@ fetchminimalsync() {
         # so make a sparse-checkout, to fetch only what we need
         local branch
 
+        if is_verified ; then
+                fetchverifiedsync || return 1
+                refresh_pkg_keys
+                return
+        fi
+
         if [[ ! -d "${PORTAGE_DIR}"/.git ]] ; then
                 einfo "Injecting usermode (minimal) gentoo portage tree"
                 branch="${EPKG_GENTOO_BRANCH:-master}"
@@ -535,6 +645,206 @@ fetchminimalsync() {
     popd || return
 
     refresh_pkg_keys
+}
+
+inject_verified_repo() {
+	local dir="${1}" url="${2}" branch="${3}" submodules="${4}"
+
+	mkdir -p "${dir}" || return 1
+	git -C "${dir}" init -q || return 1
+	git -C "${dir}" remote add -t "${branch}" origin "${url}" || return 1
+	git -C "${dir}" config core.sparsecheckout true
+	git -C "${dir}" config core.sparseCheckoutCone false
+	printf '%s\n' "profiles/*" "metadata/*" "eclass/*" ".gitignore" > "${dir}/.git/info/sparse-checkout"
+
+	if ! git -C "${dir}" fetch --depth=1 origin "+refs/heads/${branch}:refs/remotes/origin/${branch}" || ! verify_repo_head "${dir}" "origin/${branch}" ; then
+		eerror "Could not fetch a verified ${url}, removing the unfinished clone"
+		rm -rf "${dir}/.git"
+		return 1
+	fi
+
+	git -C "${dir}" checkout -B "${branch}" --track "origin/${branch}" || return 1
+	if [[ "${submodules}" == "submodules" ]] ; then
+		git -C "${dir}" submodule update --init --recursive --depth=1 || return 1
+	fi
+	rm -rf "${PORTAGE_DIR}/profiles/updates"
+}
+
+fetchverifiedsync() {
+	local gentoo="${PORTAGE_DIR:-/var/db/repos/gentoo}" repo branch failed=0 i
+	local -a repos=() branches=()
+
+	synckeys || return 1
+
+	if [[ ! -d "${gentoo}/.git" ]] ; then
+		einfo "Injecting usermode (minimal) gentoo portage tree"
+		inject_verified_repo "${gentoo}" https://gitlab.com/argent/portage.git "${EPKG_GENTOO_BRANCH:-master}" || return 1
+	fi
+
+	if [[ ! -d "${ARGENT_OVERLAY}/.git" ]] ; then
+		einfo "Injecting usermode argent-ws overlay"
+		inject_verified_repo "${ARGENT_OVERLAY}" https://gitlab.com/argent/argent-ws.git "${EPKG_OVERLAY_BRANCH:-master}" submodules || return 1
+	fi
+
+	if [[ ! -d /opt/argentws-build/.git ]] ; then
+		eerror "/opt/argentws-build is not a git checkout, use avasile to set up a mode first"
+		return 1
+	fi
+
+	while IFS= read -r repo ; do
+		branch="$(repo_branch "${repo}")"
+		if ! git -C "${repo}" fetch --depth=1 origin "+refs/heads/${branch}:refs/remotes/origin/${branch}" ; then
+			eerror "Could not fetch ${repo}"
+			failed=1
+			continue
+		fi
+		verify_repo_head "${repo}" "origin/${branch}" || failed=1
+		repos+=( "${repo}" )
+		branches+=( "${branch}" )
+	done < <(branch_repos)
+
+	if [[ ${failed} -eq 1 ]] ; then
+		eerror "Nothing was updated, every repository stays on its last verified commit"
+		return 1
+	fi
+
+	for i in "${!repos[@]}" ; do
+		git -C "${repos[i]}" reset --hard "origin/${branches[i]}"
+		git -C "${repos[i]}" clean -fd
+		if [[ "${repos[i]}" == "${ARGENT_OVERLAY}" ]] ; then
+			git -C "${repos[i]}" submodule update --init --recursive --depth=1
+			git -C "${repos[i]}" submodule foreach --recursive git clean -fd
+		fi
+		git -C "${repos[i]}" gc --prune=now
+	done
+}
+
+verify_on() {
+	local link target conf fresh=0
+
+	if [[ "${1}" != "--early" ]] ; then
+		ewarn "Signature verification is not ready yet"
+		ewarn "It launches on 1 November 2027, when every Argent system moves to GPG signed repositories and binary packages"
+		return 1
+	fi
+
+	if [[ "${EPKG_DISTRO_SET}" != "argent" ]] ; then
+		eerror "Signature verification is only available on Argent systems"
+		return 1
+	fi
+	if [[ ! -d /opt/argentws-build/.git ]] ; then
+		eerror "/opt/argentws-build is not a git checkout, use avasile --help to set up a mode first"
+		return 1
+	fi
+	if [[ ! -d /etc/portage/make.conf ]] ; then
+		eerror "/etc/portage/make.conf is not a directory, use avasile --help to set up a mode first"
+		return 1
+	fi
+	if ! command -v qetuto > /dev/null 2>&1 ; then
+		eerror "qetuto was not found, upgrade app-portage/portage-utils first"
+		return 1
+	fi
+	while read -r link target ; do
+		if [[ -e "${link}" || -L "${link}" ]] && [[ "$(readlink "${link}")" != "${target}" ]] ; then
+			eerror "${link} already exists and is not the Argent verify link, move it away first"
+			return 1
+		fi
+	done < <(verify_links)
+
+	[[ -e "${ARGENT_KEYS_DIR}" ]] || fresh=1
+
+	einfo "Switching to verified syncs and binary packages"
+	if ! fetchverifiedsync ; then
+		[[ ${fresh} -eq 1 ]] && rm -rf "${ARGENT_KEYS_DIR}"
+		eerror "Nothing was switched, this system stays unverified"
+		return 1
+	fi
+
+	for conf in repos binrepos make ; do
+		if [[ ! -f "/etc/portage/verify/${conf}.conf" ]] ; then
+			eerror "/etc/portage/verify/${conf}.conf is missing, this argentws-build branch has no verify files yet"
+			[[ ${fresh} -eq 1 ]] && rm -rf "${ARGENT_KEYS_DIR}"
+			eerror "Nothing was switched, this system stays unverified"
+			return 1
+		fi
+	done
+
+	while read -r link target ; do
+		ln -sfn "${target}" "${link}"
+		if [[ ! -e "${link}" ]] ; then
+			eerror "${link} does not resolve to ${target}"
+			verify_off
+			return 1
+		fi
+	done < <(verify_links)
+
+	einfo "Rebuilding /etc/portage/gnupg with the Gentoo and Argent keys"
+	rm -rf /etc/portage/gnupg
+	qetuto -v
+	if ! argent_key_trusted ; then
+		eerror "The Argent key is not trusted in /etc/portage/gnupg, binary packages will be refused"
+		eerror "Fix it with: epkg regen-keys"
+		return 1
+	fi
+
+	einfo "Removing local and cached binary packages, they were never checked against a signature"
+	if wipe_binpkgs noask ; then
+		einfo "Reinstalling epkg, portage-utils, gnupg and portage from verified binary packages"
+		if ! emerge -1Kgq app-portage/epkg app-portage/portage-utils app-crypt/gnupg sys-apps/portage ; then
+			ewarn "They could not be reinstalled from verified binary packages, run this again later:"
+			ewarn "emerge -1Kg app-portage/epkg app-portage/portage-utils app-crypt/gnupg sys-apps/portage"
+		fi
+	else
+		ewarn "Once no merge is running, run 'epkg awipe' and then:"
+		ewarn "emerge -1Kg app-portage/epkg app-portage/portage-utils app-crypt/gnupg sys-apps/portage"
+	fi
+
+	einfo "This system now verifies argent-keys, gentoo, argent-ws, argentws-build and every binary package"
+}
+
+verify_off() {
+	local link target
+
+	while read -r link target ; do
+		if [[ -L "${link}" && "$(readlink "${link}")" == "${target}" ]] ; then
+			rm -f "${link}"
+		fi
+	done < <(verify_links)
+	rm -rf "${ARGENT_KEYS_DIR}"
+
+	einfo "This system no longer verifies signatures, /etc/portage/gnupg was kept"
+}
+
+verify_status() {
+	local link target head
+
+	if ! is_verified ; then
+		einfo "This system does not verify signatures yet"
+		einfo "Verification launches on 1 November 2027, when every Argent system moves to GPG signed repositories and binary packages"
+		return 0
+	fi
+
+	einfo "This system verifies signatures"
+	while read -r link target ; do
+		if [[ -L "${link}" && -e "${link}" && "$(readlink "${link}")" == "${target}" ]] ; then
+			einfo "${link} -> ${target}"
+		else
+			eerror "${link} is missing or broken, repair it with: epkg verify on"
+		fi
+	done < <(verify_links)
+
+	head="$(git -C "${ARGENT_KEYS_DIR}" log -1 --format='%h from %cs' 2>/dev/null)"
+	if [[ -n "${head}" ]] ; then
+		einfo "${ARGENT_KEYS_DIR} is at ${head}, refresh it with: epkg synckeys"
+	else
+		eerror "${ARGENT_KEYS_DIR} is not a valid checkout, repair it with: epkg verify on"
+	fi
+
+	if argent_key_trusted ; then
+		einfo "The Argent key is trusted in /etc/portage/gnupg"
+	else
+		eerror "The Argent key is not trusted in /etc/portage/gnupg, fix it with: epkg regen-keys"
+	fi
 }
 
 epkgupdate() {
@@ -1500,6 +1810,7 @@ autobuildpkgonly() {
 
 syncportageconfig() {
 	# syncing with the latest updates on our argent gentoo configs
+	local branch
 
 	pushd /opt/argentws-build > /dev/null 2>&1 || return
 	echo ">>> Syncing 'portage config' into '/etc/portage' "
@@ -1512,6 +1823,13 @@ syncportageconfig() {
 		eerror "Or use "$ENABLE_COLOR"avasile --help"$DISABLE_COLOR" to switch stance"
 		eerror "Ignoring local changes"
 		echo -e ""
+	elif is_verified && [[ "${1}" != "--unsigned" ]] ; then
+		branch="$(repo_branch .)"
+		if git fetch origin "+refs/heads/${branch}:refs/remotes/origin/${branch}" && verify_repo_head /opt/argentws-build "origin/${branch}" ; then
+			git reset --hard "origin/${branch}"
+		else
+			eerror "portage config was not updated, it stays on its last verified commit"
+		fi
 	else
 		git pull
 	fi
@@ -1523,8 +1841,11 @@ syncportageconfig() {
 
 argentsync() {
 	if [[ "${EPKG_DISTRO_SET}" == "argent" ]]; then
+		if is_verified && ! synckeys && [[ "${1}" != "--unsigned" ]] ; then
+			return 1
+		fi
 		syncrepos "$@"
-		syncportageconfig
+		syncportageconfig "$@"
 	fi
 	echo ""
 }

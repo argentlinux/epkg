@@ -455,6 +455,24 @@ case "$action" in
 	regen-keys)
 		regen_pkg_keys
 		;;
+	verify)
+		case "$1" in
+			on) verify_on "${2}" ;;
+			off) verify_off ;;
+			"") verify_status ;;
+			*)
+				eerror "Usage: epkg verify [on|off]"
+				exit 1
+				;;
+		esac
+		;;
+	synckeys)
+		if ! is_verified ; then
+			eerror "This system does not verify signatures yet, synckeys is only for verified systems"
+			exit 1
+		fi
+		synckeys
+		;;
 	sysinfo)
 		emerge --info
 		;;
@@ -502,7 +520,7 @@ case "$action" in
 				reinstall-depend - Reinstall all dependencies of given package(s) based on current version/revision
 				src-newuse - Check a specific package if it has to be reinstalled due to USE flag change ( portage-specific )
 				devsync - Upgrade all Portage overlay structure with needed ebuilds for development / compilation
-				devsync --unsigned - Same as devsync, without commit signature checks on gentoo and argent-ws (rescue only)
+				devsync --unsigned - Same as devsync, without commit signature checks (rescue only)
 				module-rebuild - Rebuild all kernel modules that are currently installed
 
 				backupallpkg - Backup the whole system. Usually in /usr/portage/packages
@@ -564,7 +582,15 @@ case "$action" in
 				fix - Report any interrupted merge left in /var/db/pkg and offer to remove
 				      it, then verify the portage tree and argent-ws overlay and re-fetch
 				      any that are corrupt. Accepts --force to skip both questions
-				regen-keys - Rebuild the local binpkg signature keyring (/etc/portage/gnupg) via getuto
+				regen-keys - Rebuild the local binpkg signature keyring (/etc/portage/gnupg) via getuto,
+				             or via qetuto with the Argent key on verified systems
+				verify - Show whether this system verifies signatures, and the state of its keys
+				verify on - Not ready yet, launches on 1 November 2027 for every Argent system.
+				            Verifies argent-keys, gentoo, argent-ws, argentws-build and every binary package,
+				            rebuilds /etc/portage/gnupg and removes unverified local binary packages
+				verify off - Go back to unverified syncs and binary packages (/etc/portage/gnupg is kept)
+				synckeys - Refresh /opt/argent-keys after checking its signature (verified systems only),
+				           needed before a plain 'emerge --sync' when the signing keys changed
 				sysinfo - Display information about installed core packages and portage configuration
 				resume - Resume the last failed emerge operation(s)
 				oneshot|o - Install package(s) as one-shot package(s)
