@@ -222,7 +222,7 @@ case "$action" in
 		PKGDIR="${PKGDIR:-}" backupallpkg "$( qlist -IvC )" "$@"
 		;;
 	module-rebuild)
-		EMERGE_DEFAULT_OPTS="--rebuilt-binaries " emerge -av1 @module-rebuild
+		EMERGE_DEFAULT_OPTS="--rebuilt-binaries " emerge -a1 @module-rebuild
 		;;
 	compile)
 		compilepkg "$@"
@@ -275,7 +275,7 @@ case "$action" in
 		autoreinstall_depend "$@"
 		;;
 	automodule-rebuild)
-		EMERGE_DEFAULT_OPTS="--rebuilt-binaries " emerge -v1 @module-rebuild
+		EMERGE_DEFAULT_OPTS="--rebuilt-binaries " emerge -1 @module-rebuild
 		;;
 	autocompile)
 		if [[ "${1}" == "--update" ]] ; then
