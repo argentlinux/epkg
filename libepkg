@@ -1551,9 +1551,9 @@ _recompile_depend() {
                 exclude_args+=("--exclude" "${pkg}")
             done
 
-            local ask_opt="-va"
+            local ask_opt="-a"
             if [[ "${ask_mode}" == "noask" ]] ; then
-                ask_opt="-v"
+                ask_opt="--ask=n"
             fi
 
             local atoms=()
