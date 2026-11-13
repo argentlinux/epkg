@@ -185,13 +185,15 @@ checksync() {
 }
 
 syncrepos() {
+	local unsigned="${1}"
+	shift
 	local unsigned_conf="/etc/portage/repos.conf/zz-epkg-unsigned.conf"
 
 	if [[ -e "/etc/portage/repos.conf/layman.conf" ]] && grep -q 'argent-ws' /etc/portage/repos.conf/layman.conf ; then
 		sed -i 's|auto-sync = No|auto-sync = yes|g' /etc/portage/repos.conf/layman.conf
 	fi
 
-	if [[ "${1}" == "--unsigned" ]] ; then
+	if [[ "${unsigned}" == "--unsigned" ]] ; then
 		ewarn "Syncing gentoo and argent-ws WITHOUT commit signature verification"
 		ewarn "Use this only to recover from a broken signed sync"
 		trap 'rm -f "${unsigned_conf}"' EXIT
@@ -199,13 +201,15 @@ syncrepos() {
 		printf '[gentoo]\nsync-git-verify-commit-signature = false\n\n[argent-ws]\nsync-git-verify-commit-signature = false\n' > "${unsigned_conf}" || return 1
 	fi
 
-	if ! emerge --sync ; then
+	if [[ $# -gt 0 ]] ; then
+		emerge --sync "$@"
+	elif ! emerge --sync ; then
 		echo -e "${ENABLE_COLOR}Warning: 'emerge --sync' failed (possibly due to a broken third-party repository). Falling back to syncing Argent-specific repositories only.${DISABLE_COLOR}"
 		emerge --sync gentoo
 		emerge --sync argent-ws
 	fi
 
-	if [[ "${1}" == "--unsigned" ]] ; then
+	if [[ "${unsigned}" == "--unsigned" ]] ; then
 		rm -f "${unsigned_conf}"
 		trap - EXIT INT TERM
 	fi
@@ -1840,12 +1844,23 @@ syncportageconfig() {
 }
 
 argentsync() {
+	local unsigned="" repos=() a
+
+	for a in "$@" ; do
+		case "${a}" in
+			--unsigned) unsigned="--unsigned" ;;
+			*) repos+=( "${a}" ) ;;
+		esac
+	done
+
 	if [[ "${EPKG_DISTRO_SET}" == "argent" ]]; then
-		if is_verified && ! synckeys && [[ "${1}" != "--unsigned" ]] ; then
+		if is_verified && [[ -z "${unsigned}" ]] && ! synckeys ; then
 			return 1
 		fi
-		syncrepos "$@"
-		syncportageconfig "$@"
+		syncrepos "${unsigned}" "${repos[@]}"
+		if [[ ${#repos[@]} -eq 0 ]] ; then
+			syncportageconfig ${unsigned}
+		fi
 	fi
 	echo ""
 }
